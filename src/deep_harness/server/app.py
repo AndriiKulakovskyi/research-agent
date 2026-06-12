@@ -16,6 +16,7 @@ from deep_harness.server.agents import AgentManager
 from deep_harness.server.db import AppDB
 from deep_harness.server.routes import (
     auth_router,
+    experiments_router,
     files_router,
     settings_router,
     threads_router,
@@ -49,6 +50,7 @@ def create_app(model: str | BaseChatModel | None = None) -> FastAPI:
     app.include_router(threads_router)
     app.include_router(files_router)
     app.include_router(settings_router)
+    app.include_router(experiments_router)
 
     @app.get("/api/health")
     def health() -> dict:

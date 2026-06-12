@@ -19,6 +19,7 @@ The harness combines the deepagents built-ins with domain tools and specialist s
 | **Compute routing** | `run_training_job` executes training scripts on the backend each user picks in ⚙ Settings: the app host (local CPU/GPU) or a remote **Modal** GPU sandbox (T4/L4/A10G/A100/H100) with `outputs/` synced back to the workspace |
 | **Deep research** | `research-analyst` subagent runs literature reviews before methodology design: keyless arXiv + Semantic Scholar search, optional Tavily web search, `fetch_url`, and the `think_tool` reflection loop; citation-backed reviews saved under `research/` |
 | **Async research** | Optional Agent Protocol server (`deep-harness-research-server`) hosts the researcher as a background subagent — the main agent starts a review with `start_async_task`, keeps working (e.g. preparing data), and collects the report with `check_async_task` |
+| **Experiment tracking** | `log_experiment` / `list_experiments` keep every training/evaluation run (metrics, params, artifacts) in a per-user registry, surfaced in the UI **Experiments** tab; figures render directly in the file viewer |
 | **Self-improving memory** | A per-workspace `memory/AGENTS.md` loaded into the system prompt at startup; the agent records durable lessons there as it works |
 | **Delegation** | Subagents via `task`: `data-scientist`, `ml-engineer`, `data-engineer`, `software-engineer`, `knowledge-engineer` |
 
@@ -124,7 +125,10 @@ print(result["messages"][-1].content)
 ## Architecture
 
 For the full step-by-step request lifecycle (and why `cli.py` exists alongside
-the server), see [docs/architecture.md](docs/architecture.md).
+the server), see [docs/architecture.md](docs/architecture.md). For how a
+research initiative flows through the product — idea → literature → data
+grounding → plan → experiments → readout → consolidated knowledge — see
+[docs/research-workflow.md](docs/research-workflow.md).
 
 ```
 React UI (frontend/)  ──HTTP/SSE──▶  FastAPI (src/deep_harness/server/)

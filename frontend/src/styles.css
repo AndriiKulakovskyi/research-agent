@@ -399,6 +399,53 @@ textarea:focus {
   margin-top: 6px;
 }
 
+.file-image {
+  max-width: 100%;
+  padding: 12px;
+  background: #fff;
+}
+
+/* ---- experiments ---- */
+.experiment {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.experiment-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.experiment-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+.metric-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.chip {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-family: var(--mono);
+}
+.experiment-notes {
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.artifact-link {
+  text-align: left;
+  padding: 0;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+
 .file-view pre {
   flex: 1;
   margin: 0;

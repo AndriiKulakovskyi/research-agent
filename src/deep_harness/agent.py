@@ -16,6 +16,7 @@ from deep_harness.config import Settings, get_settings, set_settings
 from deep_harness.prompts import MAIN_SYSTEM_PROMPT
 from deep_harness.subagents import SKILL_SOURCES, build_subagents
 from deep_harness.tools import ALL_TOOLS
+from deep_harness.tools.experiments import make_experiment_tools
 
 PACKAGED_SKILLS_DIR = Path(__file__).parent / "skills"
 
@@ -96,6 +97,8 @@ def build_agent(
 
     provider = compute_config_provider or ComputeConfig.from_env
     training_tool = make_training_tool(root, provider)
+    experiment_tools = make_experiment_tools(root)
+    workspace_tools = [training_tool, *experiment_tools]
 
     # With a research server configured, the agent also gets async task tools
     # (start/check/update/cancel) to run literature research in the background
@@ -126,10 +129,10 @@ def build_agent(
 
     return create_deep_agent(
         model=model if model is not None else settings.model,
-        tools=[*ALL_TOOLS, training_tool],
+        tools=[*ALL_TOOLS, *workspace_tools],
         system_prompt=MAIN_SYSTEM_PROMPT,
         middleware=middleware,
-        subagents=build_subagents(extra_compute_tools=[training_tool]),
+        subagents=build_subagents(extra_compute_tools=workspace_tools),
         backend=backend,
         skills=SKILL_SOURCES,
         memory=["/memory/AGENTS.md"],
