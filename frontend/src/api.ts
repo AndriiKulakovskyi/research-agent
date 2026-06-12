@@ -1,5 +1,6 @@
 import type {
   ComputeSettings,
+  ExperimentRecord,
   FileEntry,
   HistoryMessage,
   StreamEvent,
@@ -83,10 +84,23 @@ export const updateComputeSettings = (body: {
   modal_token_secret: string | null;
 }) => request<ComputeSettings>("/api/settings", { method: "PUT", body: JSON.stringify(body) });
 
-export async function readFile(path: string): Promise<string> {
+export const listExperiments = () => request<ExperimentRecord[]>("/api/experiments");
+
+export interface FileContent {
+  kind: "text" | "image";
+  text?: string;
+  objectUrl?: string;
+}
+
+/** Read a workspace file: images come back as a blob object URL for <img>. */
+export async function readFile(path: string): Promise<FileContent> {
   const response = await fetch(`/api/files/${encodeURIComponent(path)}`, { headers: headers() });
   if (!response.ok) throw new Error(`cannot read ${path}`);
-  return response.text();
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.startsWith("image/")) {
+    return { kind: "image", objectUrl: URL.createObjectURL(await response.blob()) };
+  }
+  return { kind: "text", text: await response.text() };
 }
 
 /** POST a message and invoke `onEvent` for every SSE event until `done`. */

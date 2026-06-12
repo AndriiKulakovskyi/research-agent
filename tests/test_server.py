@@ -168,6 +168,43 @@ def test_compute_settings_are_per_user(client):
     assert client.get("/api/settings", headers=bob).json()["compute_backend"] == "local"
 
 
+def test_experiments_endpoint(client, settings):
+    headers = _auth(client)
+    assert client.get("/api/experiments", headers=headers).json() == []
+    # the agent's log_experiment writes to the user's workspace registry
+    user_dir = next((settings.workspace_dir / "users").iterdir())
+    from deep_harness.tools.experiments import make_experiment_tools
+
+    log, _ = make_experiment_tools(user_dir)
+    log.invoke({"name": "demo-run", "metrics": {"rmse": 1.2}})
+    records = client.get("/api/experiments", headers=headers).json()
+    assert len(records) == 1 and records[0]["name"] == "demo-run"
+    # other users see their own (empty) registry
+    bob = _auth(client, "bob")
+    assert client.get("/api/experiments", headers=bob).json() == []
+
+
+def test_image_files_served_as_bytes(client, settings):
+    headers = _auth(client)
+    client.get("/api/files", headers=headers)  # provision workspace
+    user_dir = next((settings.workspace_dir / "users").iterdir())
+    # 1x1 transparent PNG
+    png = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+        "0000000d4944415478da63fcff9fa11e0003030101e2263db70000000049454e44ae426082"
+    )
+    (user_dir / "outputs").mkdir(exist_ok=True)
+    (user_dir / "outputs" / "roc.png").write_bytes(png)
+    response = client.get("/api/files/outputs%2Froc.png", headers=headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content == png
+    # text files still come back as text
+    (user_dir / "outputs" / "metrics.json").write_text('{"auc": 0.9}')
+    text = client.get("/api/files/outputs%2Fmetrics.json", headers=headers)
+    assert text.status_code == 200 and "0.9" in text.text
+
+
 def test_todos_endpoint_empty_thread(client):
     headers = _auth(client)
     thread = client.post("/api/threads", json={}, headers=headers).json()

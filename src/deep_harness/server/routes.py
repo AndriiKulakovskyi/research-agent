@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import mimetypes
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+
+from deep_harness.tools.experiments import read_registry
 
 from deep_harness.server import auth as auth_mod
 from deep_harness.server.auth import CurrentUser, get_current_user
@@ -26,8 +30,12 @@ auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 threads_router = APIRouter(prefix="/api/threads", tags=["threads"])
 files_router = APIRouter(prefix="/api/files", tags=["files"])
 settings_router = APIRouter(prefix="/api/settings", tags=["settings"])
+experiments_router = APIRouter(prefix="/api/experiments", tags=["experiments"])
+
+IMAGE_MEDIA_TYPES = {"image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp"}
 
 MAX_FILE_BYTES = 512_000
+MAX_IMAGE_BYTES = 8_000_000
 RECURSION_LIMIT = 250
 
 
@@ -201,17 +209,35 @@ def list_files(request: Request, user: CurrentUser = Depends(get_current_user)):
     return entries
 
 
-@files_router.get("/{file_path:path}", response_class=PlainTextResponse)
+@files_router.get("/{file_path:path}")
 def read_file(file_path: str, request: Request, user: CurrentUser = Depends(get_current_user)):
+    """Serve a workspace file: images as bytes (so the UI can render figures),
+    everything else as text."""
     root = request.app.state.agents.user_workspace(user.id)
     target = (root / file_path).resolve()
     if root.resolve() not in target.parents and target != root.resolve():
         raise HTTPException(403, "path escapes workspace")
     if not target.is_file():
         raise HTTPException(404, "file not found")
+    media_type = mimetypes.guess_type(target.name)[0] or ""
+    if media_type in IMAGE_MEDIA_TYPES:
+        if target.stat().st_size > MAX_IMAGE_BYTES:
+            raise HTTPException(413, "image too large to preview")
+        return FileResponse(target, media_type=media_type)
     if target.stat().st_size > MAX_FILE_BYTES:
         raise HTTPException(413, "file too large to preview")
     try:
-        return target.read_text(errors="replace")
+        return PlainTextResponse(target.read_text(errors="replace"))
     except OSError as exc:
         raise HTTPException(500, f"cannot read file: {exc}") from exc
+
+
+# -- experiments -------------------------------------------------------------
+
+
+@experiments_router.get("")
+def list_experiments_route(request: Request, user: CurrentUser = Depends(get_current_user)):
+    """The user's experiment registry (newest first) for the UI Experiments tab."""
+    workspace = request.app.state.agents.user_workspace(user.id)
+    records = read_registry(workspace)
+    return sorted(records, key=lambda r: r.get("timestamp", 0), reverse=True)

@@ -42,14 +42,32 @@ it executes on the user's configured compute backend (local host or a remote \
 Modal GPU sandbox). Always write device-agnostic code that uses a GPU when \
 present and falls back to CPU cleanly.
 
-## Literature research before methodology
-Before designing an algorithmic approach to a non-trivial problem, run a \
-literature review: delegate to the `research-analyst` subagent (or \
-`start_async_task` with the async researcher when available, so the review \
-runs in the background while you prepare data). For multi-faceted topics, \
-spawn one researcher per dimension — at most 3 in parallel. Ground the chosen \
-methodology in what the review found, cite the key papers in your plan, and \
-save the review under `research/` in the workspace.
+## Research lifecycle
+For any new research initiative (a hypothesis to test, an algorithm to develop, \
+a modeling question), follow this loop and keep its artifacts in the workspace:
+1. **Survey** — run a literature review via the `research-analyst` subagent \
+   (or `start_async_task` with the async researcher when available, so the \
+   review runs while you do step 2). For multi-faceted topics spawn one \
+   researcher per dimension, at most 3 in parallel.
+2. **Ground in the data** — check feasibility against reality before \
+   committing to a method: which tables/variables exist (`describe_table`, \
+   `describe_variable`), how much data, what quality, what compute (`gpu_info`).
+3. **Plan** — write `research/PLAN.md`: hypothesis, related work (cited from \
+   the review), data and its caveats, chosen methodology with rationale, the \
+   experiments to run, and explicit success criteria. Update it as the work \
+   evolves — it is the durable record, unlike the todo list.
+4. **Experiment** — implement and run per the plan. Log EVERY run with \
+   `log_experiment` (metrics, params, artifacts, one-line interpretation), \
+   including failed and negative results. Check `list_experiments` before \
+   re-running something similar.
+5. **Read out** — compare results against the plan's success criteria. Lead \
+   with the verdict, then evidence (metrics vs baseline, figures), then \
+   concrete next steps (continue / pivot / stop, and why).
+6. **Consolidate** — record durable lessons in `memory/AGENTS.md` (what \
+   worked, what didn't, why); have the knowledge-engineer ground the key \
+   papers and chosen approach in the knowledge graph (e.g. `ex:churn_model \
+   ex:informedBy ex:paper_vaswani2017; ex:paper_vaswani2017 rdfs:label "..."`) \
+   so future initiatives can build on this one.
 
 ## Knowledge graph
 Use the knowledge graph to capture durable, relational knowledge: how datasets \
@@ -79,6 +97,8 @@ Method:
 - Be rigorous: check distributions, missingness, and outliers before modeling; \
   report effect sizes and uncertainty, not just point estimates; state the \
   limitations of the analysis.
+- Log modeling/evaluation runs with `log_experiment` (metrics, params, \
+  artifacts) so results stay comparable across sessions.
 - Record any newly learned variable semantics with `define_variable`.
 
 Return a concise report: findings first, then method, then artifact paths.
@@ -136,6 +156,10 @@ Method:
 - Evaluate honestly: hold-out or cross-validation, comparison against a naive \
   baseline, and uncertainty where feasible. Report failures and limitations \
   verbatim — never present an unvalidated model as done.
+- Log EVERY run with `log_experiment` — metrics (including the baseline), \
+  params, artifact paths, and a one-line interpretation. Failed and negative \
+  runs too: they prevent repeating dead ends. Check `list_experiments` first \
+  so you build on prior runs instead of redoing them.
 
 Return findings first (metrics vs baseline), then method, then artifact paths.
 """

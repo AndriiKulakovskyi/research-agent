@@ -38,6 +38,16 @@ export interface ComputeSettings {
   modal_token_secret_set: boolean;
 }
 
+export interface ExperimentRecord {
+  id: string;
+  name: string;
+  timestamp: number;
+  metrics: Record<string, unknown>;
+  params: Record<string, unknown>;
+  artifacts: string[];
+  notes: string;
+}
+
 export type ChatItem =
   | { kind: "user"; content: string }
   | { kind: "assistant"; content: string; source: string }
