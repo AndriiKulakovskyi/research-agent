@@ -10,7 +10,14 @@ from __future__ import annotations
 from deepagents import SubAgent
 
 from deep_harness import prompts
-from deep_harness.tools import DATABASE_TOOLS, KNOWLEDGE_GRAPH_TOOLS, SEMANTICS_TOOLS
+from deep_harness.tools import (
+    COMPUTE_TOOLS,
+    DATABASE_TOOLS,
+    KNOWLEDGE_GRAPH_TOOLS,
+    SEMANTICS_TOOLS,
+)
+
+SKILL_SOURCES = ["/skills/"]
 
 
 def build_subagents() -> list[SubAgent]:
@@ -23,7 +30,20 @@ def build_subagents() -> list[SubAgent]:
                 "analytical question and the relevant tables/files."
             ),
             system_prompt=prompts.DATA_SCIENTIST_PROMPT,
-            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS],
+            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *COMPUTE_TOOLS],
+            skills=SKILL_SOURCES,
+        ),
+        SubAgent(
+            name="ml-engineer",
+            description=(
+                "Machine-learning engineer for designing, implementing, training, "
+                "and evaluating AI algorithms (classical ML and neural networks), "
+                "GPU-accelerated when hardware allows. Give it the objective, the "
+                "data location, and acceptance metrics."
+            ),
+            system_prompt=prompts.ML_ENGINEER_PROMPT,
+            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *COMPUTE_TOOLS],
+            skills=SKILL_SOURCES,
         ),
         SubAgent(
             name="data-engineer",

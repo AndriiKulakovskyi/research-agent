@@ -106,18 +106,23 @@ def test_thread_isolation_between_users(client):
 def test_workspace_files_scoped_per_user(client, settings):
     alice = _auth(client, "alice")
     bob = _auth(client, "bob")
-    # files endpoint creates the per-user workspace lazily
-    assert client.get("/api/files", headers=alice).json() == []
+    # The lazily provisioned workspace is seeded with the agent's memory file;
+    # packaged skills exist on disk but are hidden from the artifact browser.
+    initial = [f["path"] for f in client.get("/api/files", headers=alice).json()]
+    assert initial == ["memory/AGENTS.md"]
 
     alice_ws = settings.workspace_dir / "users"
     user_dirs = list(alice_ws.iterdir())
     assert len(user_dirs) == 1
+    assert (user_dirs[0] / "skills" / "pytorch-training" / "SKILL.md").exists()
     (user_dirs[0] / "report.md").write_text("# Findings")
 
-    alice_files = client.get("/api/files", headers=alice).json()
-    assert [f["path"] for f in alice_files] == ["report.md"]
+    alice_files = [f["path"] for f in client.get("/api/files", headers=alice).json()]
+    assert "report.md" in alice_files
+    assert not any(p.startswith("skills/") for p in alice_files)
     assert client.get("/api/files/report.md", headers=alice).text == "# Findings"
-    assert client.get("/api/files", headers=bob).json() == []
+    bob_files = [f["path"] for f in client.get("/api/files", headers=bob).json()]
+    assert "report.md" not in bob_files
     # path traversal is blocked
     assert (
         client.get("/api/files/..%2F..%2Fapp.db", headers=alice).status_code in (403, 404)

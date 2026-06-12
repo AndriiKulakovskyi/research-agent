@@ -15,7 +15,9 @@ The harness combines the deepagents built-ins with domain tools and specialist s
 | **Database** | `list_tables`, `describe_table`, `run_sql` (read-only by design) over any SQLAlchemy URL |
 | **Variable semantics** | A persistent JSON data dictionary: `search_variables`, `describe_variable`, `define_variable`. Column meanings, units, synonyms, and caveats are merged into `describe_table` output |
 | **Knowledge graph** | An RDF graph (rdflib, persisted as Turtle): `kg_add`, `kg_describe`, `kg_sparql`, `kg_stats` for entities, concept hierarchies, and data lineage |
-| **Delegation** | Subagents via `task`: `data-scientist`, `data-engineer`, `software-engineer`, `knowledge-engineer` |
+| **AI/ML on GPU** | `gpu_info` hardware detection + packaged skills (`pytorch-training`, `gpu-data-science` for RAPIDS cuDF/cuML); the agent writes device-agnostic code that uses a GPU when present and falls back to CPU |
+| **Self-improving memory** | A per-workspace `memory/AGENTS.md` loaded into the system prompt at startup; the agent records durable lessons there as it works |
+| **Delegation** | Subagents via `task`: `data-scientist`, `ml-engineer`, `data-engineer`, `software-engineer`, `knowledge-engineer` |
 
 The agent works *semantics-first*: it consults the data dictionary before querying
 unfamiliar columns, records newly learned variable meanings back into the dictionary,
@@ -132,12 +134,20 @@ deep-harness (orchestrator, Claude Opus 4.8)
 ├── domain tools: run_sql · describe_table · list_tables
 │                 search/describe/define_variable (data dictionary)
 │                 kg_add · kg_describe · kg_sparql · kg_stats (RDF graph)
+├── skills: pytorch-training · gpu-data-science (RAPIDS)   [+ gpu_info tool]
+├── memory: memory/AGENTS.md (per workspace, agent-maintained)
 └── subagents (task):
     ├── data-scientist      EDA, stats, modeling, visualization
+    ├── ml-engineer         AI algorithms: train/evaluate models, GPU-aware
     ├── data-engineer       schemas, pipelines, data quality, lineage
     ├── software-engineer   implementation + tests in the workspace
     └── knowledge-engineer  dictionary & knowledge-graph curation
 ```
+
+Running on a GPU host (e.g. a CUDA workstation or a `nvidia/cuda` container)
+requires no configuration: the agent calls `gpu_info`, sees the hardware, and
+installs/uses torch-CUDA or RAPIDS per its skills. On CPU-only hosts the same
+prompts produce pandas/sklearn fallbacks.
 
 State persists across runs in the workspace: `data_dictionary.json` (variable
 semantics) and `knowledge_graph.ttl` (RDF graph) are plain files you can review

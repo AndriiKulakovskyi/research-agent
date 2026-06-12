@@ -13,8 +13,42 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from deep_harness.config import Settings, get_settings, set_settings
 from deep_harness.prompts import MAIN_SYSTEM_PROMPT
-from deep_harness.subagents import build_subagents
+from deep_harness.subagents import SKILL_SOURCES, build_subagents
 from deep_harness.tools import ALL_TOOLS
+
+PACKAGED_SKILLS_DIR = Path(__file__).parent / "skills"
+
+INITIAL_MEMORY = """\
+# Agent memory
+
+Durable lessons learned while working in this workspace. Update this file when
+you confirm a convention, a data caveat, or an approach worth remembering;
+correct or delete entries that turn out to be wrong. Keep one lesson per
+bullet with a short why.
+
+- (nothing recorded yet)
+"""
+
+
+def sync_workspace_assets(root: Path) -> None:
+    """Materialize packaged skills and seed the memory file in a workspace.
+
+    Skills are copied fresh on every build (package is the source of truth);
+    the memory file is seeded once and never overwritten — the agent owns it.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    skills_dst = root / "skills"
+    for skill_dir in sorted(PACKAGED_SKILLS_DIR.iterdir()):
+        if skill_dir.is_dir():
+            target = skills_dst / skill_dir.name
+            target.mkdir(parents=True, exist_ok=True)
+            for f in skill_dir.iterdir():
+                if f.is_file():
+                    (target / f.name).write_text(f.read_text())
+    memory_file = root / "memory" / "AGENTS.md"
+    if not memory_file.exists():
+        memory_file.parent.mkdir(parents=True, exist_ok=True)
+        memory_file.write_text(INITIAL_MEMORY)
 
 
 def build_agent(
@@ -44,7 +78,7 @@ def build_agent(
     settings.ensure_workspace()
 
     root = Path(workspace_dir) if workspace_dir is not None else settings.workspace_dir
-    root.mkdir(parents=True, exist_ok=True)
+    sync_workspace_assets(root)
 
     # virtual_mode=True scopes the agent's file paths to the workspace root.
     # It is a guardrail, not a sandbox: `execute` still runs on the host.
@@ -61,6 +95,8 @@ def build_agent(
         system_prompt=MAIN_SYSTEM_PROMPT,
         subagents=build_subagents(),
         backend=backend,
+        skills=SKILL_SOURCES,
+        memory=["/memory/AGENTS.md"],
         checkpointer=checkpointer,
         name="deep-harness-agent",
     )

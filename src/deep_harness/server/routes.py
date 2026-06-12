@@ -152,10 +152,14 @@ def list_files(request: Request, user: CurrentUser = Depends(get_current_user)):
     root = request.app.state.agents.user_workspace(user.id)
     entries = []
     for path in sorted(root.rglob("*")):
-        if path.is_file() and not path.name.startswith("."):
-            entries.append(
-                FileEntry(path=str(path.relative_to(root)), size=path.stat().st_size)
-            )
+        if not path.is_file() or path.name.startswith("."):
+            continue
+        rel = str(path.relative_to(root))
+        # skills/ holds read-only harness docs synced from the package — noise
+        # in a user's artifact browser. memory/ stays visible: the agent's notes.
+        if rel.startswith("skills/"):
+            continue
+        entries.append(FileEntry(path=rel, size=path.stat().st_size))
         if len(entries) >= 500:
             break
     return entries

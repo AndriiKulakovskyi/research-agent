@@ -87,7 +87,8 @@ build_agent ┤
 |---|---|
 | `src/deep_harness/agent.py` | `build_agent()` — assembles the deep agent |
 | `src/deep_harness/prompts.py`, `subagents.py` | System prompts; specialist subagent roster |
-| `src/deep_harness/tools/` | Domain tools: database, variable semantics, knowledge graph |
+| `src/deep_harness/tools/` | Domain tools: database, variable semantics, knowledge graph, compute (`gpu_info`) |
+| `src/deep_harness/skills/` | Packaged skills (markdown API guides: `pytorch-training`, `gpu-data-science`) synced into every workspace |
 | `src/deep_harness/config.py` | Env-driven settings (model, workspace, DB/dictionary/KG paths) |
 | `src/deep_harness/messages.py` | Shared message serialization (used by server stream and CLI) |
 | `src/deep_harness/cli.py` | Terminal entry point (developer tool, optional) |
@@ -104,3 +105,5 @@ build_agent ┤
 | Knowledge graph | shared | `workspace/knowledge_graph.ttl` |
 | Conversation threads + plans | per user | `workspace/checkpoints.db` (ownership in `app.db`) |
 | Files, scripts, artifacts | per user | `workspace/users/<user_id>/` |
+| Skills (read-only harness docs) | synced into every workspace | `<workspace>/skills/` (hidden from the UI file browser) |
+| Agent memory (`AGENTS.md`) | per user, agent-maintained | `<workspace>/memory/AGENTS.md` (seeded once, loaded into the system prompt at startup) |

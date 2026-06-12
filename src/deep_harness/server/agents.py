@@ -15,7 +15,7 @@ from typing import Any
 from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from deep_harness.agent import build_agent
+from deep_harness.agent import build_agent, sync_workspace_assets
 from deep_harness.config import get_settings
 
 
@@ -31,7 +31,7 @@ class AgentManager:
 
     def user_workspace(self, user_id: str) -> Path:
         root = get_settings().workspace_dir / "users" / user_id
-        root.mkdir(parents=True, exist_ok=True)
+        sync_workspace_assets(root)
         return root
 
     def get_agent(self, user_id: str) -> Any:
