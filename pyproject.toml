@@ -24,6 +24,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+modal = [
+    "modal>=1.0",
+]
 dev = [
     "pytest>=8.0",
     "httpx>=0.27",

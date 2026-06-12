@@ -12,6 +12,7 @@ import {
 } from "./api";
 import { Chat } from "./components/Chat";
 import { Login } from "./components/Login";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
 import { SidePanel } from "./components/SidePanel";
 import type { ChatItem, ThreadInfo, TodoItem } from "./types";
@@ -25,6 +26,7 @@ export default function App() {
   const [streamingText, setStreamingText] = useState("");
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
   const streamBuffer = useRef("");
 
   const refreshThreads = useCallback(async () => {
@@ -161,9 +163,11 @@ export default function App() {
         onLogout={() => {
           logout().finally(() => setAuthed(false));
         }}
+        onSettings={() => setShowSettings(true)}
       />
       <Chat items={items} streamingText={streamingText} busy={busy} onSend={send} />
       <SidePanel todos={todos} refreshKey={refreshKey} />
+      {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

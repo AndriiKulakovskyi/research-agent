@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS threads (
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id TEXT PRIMARY KEY REFERENCES users(id),
+    compute_backend TEXT NOT NULL DEFAULT 'local',
+    gpu_type TEXT NOT NULL DEFAULT 'A10G',
+    modal_token_id TEXT NOT NULL DEFAULT '',
+    modal_token_secret TEXT NOT NULL DEFAULT '',
+    updated_at REAL NOT NULL
+);
 """
 
 
@@ -82,6 +90,45 @@ class AppDB:
     def delete_token(self, token_hash: str) -> None:
         with self._connect() as conn:
             conn.execute("DELETE FROM tokens WHERE token_hash = ?", (token_hash,))
+
+    # -- user settings ---------------------------------------------------------
+
+    def get_user_settings(self, user_id: str) -> sqlite3.Row | None:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM user_settings WHERE user_id = ?", (user_id,)
+            ).fetchone()
+
+    def upsert_user_settings(
+        self,
+        user_id: str,
+        compute_backend: str,
+        gpu_type: str,
+        modal_token_id: str | None,
+        modal_token_secret: str | None,
+    ) -> None:
+        """Update settings; ``None`` for a token field keeps the stored value
+        (so clients never have to echo secrets back)."""
+        with self._connect() as conn:
+            existing = conn.execute(
+                "SELECT * FROM user_settings WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            token_id = modal_token_id if modal_token_id is not None else (
+                existing["modal_token_id"] if existing else ""
+            )
+            token_secret = modal_token_secret if modal_token_secret is not None else (
+                existing["modal_token_secret"] if existing else ""
+            )
+            conn.execute(
+                """INSERT INTO user_settings VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(user_id) DO UPDATE SET
+                     compute_backend = excluded.compute_backend,
+                     gpu_type = excluded.gpu_type,
+                     modal_token_id = excluded.modal_token_id,
+                     modal_token_secret = excluded.modal_token_secret,
+                     updated_at = excluded.updated_at""",
+                (user_id, compute_backend, gpu_type, token_id, token_secret, time.time()),
+            )
 
     # -- threads -------------------------------------------------------------
 

@@ -129,6 +129,60 @@ def test_workspace_files_scoped_per_user(client, settings):
     )
 
 
+def test_compute_settings_roundtrip(client):
+    headers = _auth(client)
+    # defaults
+    settings = client.get("/api/settings", headers=headers).json()
+    assert settings == {
+        "compute_backend": "local",
+        "gpu_type": "A10G",
+        "modal_token_id": "",
+        "modal_token_secret_set": False,
+    }
+    # switch to modal with credentials
+    updated = client.put(
+        "/api/settings",
+        json={
+            "compute_backend": "modal",
+            "gpu_type": "A100",
+            "modal_token_id": "ak-test",
+            "modal_token_secret": "as-supersecret",
+        },
+        headers=headers,
+    ).json()
+    assert updated["compute_backend"] == "modal"
+    assert updated["gpu_type"] == "A100"
+    assert updated["modal_token_secret_set"] is True
+    assert "as-supersecret" not in str(updated)  # secret never echoed
+    # update without resending the secret keeps it stored
+    kept = client.put(
+        "/api/settings",
+        json={"compute_backend": "modal", "gpu_type": "H100"},
+        headers=headers,
+    ).json()
+    assert kept["modal_token_secret_set"] is True
+    # invalid values rejected
+    assert (
+        client.put(
+            "/api/settings",
+            json={"compute_backend": "ec2", "gpu_type": "A100"},
+            headers=headers,
+        ).status_code
+        == 422
+    )
+
+
+def test_compute_settings_are_per_user(client):
+    alice = _auth(client, "alice")
+    bob = _auth(client, "bob")
+    client.put(
+        "/api/settings",
+        json={"compute_backend": "modal", "gpu_type": "A100", "modal_token_id": "ak-a"},
+        headers=alice,
+    )
+    assert client.get("/api/settings", headers=bob).json()["compute_backend"] == "local"
+
+
 def test_todos_endpoint_empty_thread(client):
     headers = _auth(client)
     thread = client.post("/api/threads", json={}, headers=headers).json()

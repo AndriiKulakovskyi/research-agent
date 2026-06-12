@@ -16,6 +16,7 @@ The harness combines the deepagents built-ins with domain tools and specialist s
 | **Variable semantics** | A persistent JSON data dictionary: `search_variables`, `describe_variable`, `define_variable`. Column meanings, units, synonyms, and caveats are merged into `describe_table` output |
 | **Knowledge graph** | An RDF graph (rdflib, persisted as Turtle): `kg_add`, `kg_describe`, `kg_sparql`, `kg_stats` for entities, concept hierarchies, and data lineage |
 | **AI/ML on GPU** | `gpu_info` hardware detection + packaged skills (`pytorch-training`, `gpu-data-science` for RAPIDS cuDF/cuML); the agent writes device-agnostic code that uses a GPU when present and falls back to CPU |
+| **Compute routing** | `run_training_job` executes training scripts on the backend each user picks in ⚙ Settings: the app host (local CPU/GPU) or a remote **Modal** GPU sandbox (T4/L4/A10G/A100/H100) with `outputs/` synced back to the workspace |
 | **Self-improving memory** | A per-workspace `memory/AGENTS.md` loaded into the system prompt at startup; the agent records durable lessons there as it works |
 | **Delegation** | Subagents via `task`: `data-scientist`, `ml-engineer`, `data-engineer`, `software-engineer`, `knowledge-engineer` |
 
@@ -148,6 +149,25 @@ Running on a GPU host (e.g. a CUDA workstation or a `nvidia/cuda` container)
 requires no configuration: the agent calls `gpu_info`, sees the hardware, and
 installs/uses torch-CUDA or RAPIDS per its skills. On CPU-only hosts the same
 prompts produce pandas/sklearn fallbacks.
+
+### Training off the app server (Modal)
+
+Each user chooses in **⚙ Settings** (UI) where `run_training_job` executes:
+
+- **Local** (default) — a subprocess on the app host, using its CPU/GPU.
+- **Modal** — a remote GPU sandbox. The user saves their Modal API token
+  (token ID + secret; the secret is stored write-only and never echoed by the
+  API) and picks a GPU type. The job uploads the script and its data files,
+  runs it on the selected GPU, and downloads everything the script wrote to
+  `outputs/` back into the user's workspace.
+
+Settings are per user, applied to the next job without restarting anything.
+The CLI uses `DEEP_AGENT_COMPUTE` / `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET`
+env vars instead. Modal support needs the optional extra:
+`pip install -e ".[modal]"`. Note: the Modal path is implemented defensively
+(all failures return as readable messages to the agent) but has not been
+exercised against a live Modal account yet — validate with your token before
+relying on it.
 
 State persists across runs in the workspace: `data_dictionary.json` (variable
 semantics) and `knowledge_graph.ttl` (RDF graph) are plain files you can review

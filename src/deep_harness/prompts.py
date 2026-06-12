@@ -37,8 +37,10 @@ and units using the data dictionary.
 For algorithm development, model training, or large-scale computation, check \
 the hardware first with `gpu_info` and consult the `pytorch-training` and \
 `gpu-data-science` skills before writing code. Delegate substantial ML work to \
-the `ml-engineer` subagent. Always write device-agnostic code that uses a GPU \
-when present and falls back to CPU cleanly.
+the `ml-engineer` subagent. Run heavy training jobs with `run_training_job` — \
+it executes on the user's configured compute backend (local host or a remote \
+Modal GPU sandbox). Always write device-agnostic code that uses a GPU when \
+present and falls back to CPU cleanly.
 
 ## Knowledge graph
 Use the knowledge graph to capture durable, relational knowledge: how datasets \
@@ -116,9 +118,12 @@ Method:
   cuDF/cuML), fall back to CPU (pandas/sklearn) cleanly when not.
 - Pull training data via the database tools; check `describe_variable` so you \
   use features with the right units and meaning.
-- Work in scripts in the workspace via `execute`: validate the pipeline on a \
-  small subset first, then scale. Save scripts, metrics (JSON/CSV), curves \
-  (PNG), and model checkpoints to files and report their paths.
+- Develop in scripts in the workspace; validate the pipeline on a small subset \
+  with `execute` first, then run the real job with `run_training_job` — it \
+  executes on the compute backend the user configured (local host or a remote \
+  Modal GPU sandbox; you don't choose). Scripts must write all artifacts \
+  (metrics JSON/CSV, curves PNG, checkpoints) under `outputs/`, and for remote \
+  runs you must list the script's data files and pip packages in the call.
 - Evaluate honestly: hold-out or cross-validation, comparison against a naive \
   baseline, and uncertainty where feasible. Report failures and limitations \
   verbatim — never present an unvalidated model as done.

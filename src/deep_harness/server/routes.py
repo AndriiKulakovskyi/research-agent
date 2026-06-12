@@ -8,6 +8,8 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from deep_harness.server import auth as auth_mod
 from deep_harness.server.auth import CurrentUser, get_current_user
 from deep_harness.server.schemas import (
+    ComputeSettings,
+    ComputeSettingsUpdate,
     Credentials,
     FileEntry,
     MessageOut,
@@ -23,6 +25,7 @@ from deep_harness.server.streaming import serialize_history, stream_agent_events
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 threads_router = APIRouter(prefix="/api/threads", tags=["threads"])
 files_router = APIRouter(prefix="/api/files", tags=["files"])
+settings_router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 MAX_FILE_BYTES = 512_000
 RECURSION_LIMIT = 250
@@ -142,6 +145,39 @@ async def post_message(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# -- compute settings -------------------------------------------------------------
+
+
+@settings_router.get("", response_model=ComputeSettings)
+def get_settings_route(request: Request, user: CurrentUser = Depends(get_current_user)):
+    row = request.app.state.db.get_user_settings(user.id)
+    if row is None:
+        return ComputeSettings()
+    return ComputeSettings(
+        compute_backend=row["compute_backend"],
+        gpu_type=row["gpu_type"],
+        modal_token_id=row["modal_token_id"],
+        modal_token_secret_set=bool(row["modal_token_secret"]),
+    )
+
+
+@settings_router.put("", response_model=ComputeSettings)
+def update_settings_route(
+    body: ComputeSettingsUpdate,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+):
+    db = request.app.state.db
+    db.upsert_user_settings(
+        user.id,
+        compute_backend=body.compute_backend,
+        gpu_type=body.gpu_type,
+        modal_token_id=body.modal_token_id,
+        modal_token_secret=body.modal_token_secret,
+    )
+    return get_settings_route(request, user)
 
 
 # -- workspace files -------------------------------------------------------------

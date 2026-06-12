@@ -14,7 +14,12 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from deep_harness.config import get_settings
 from deep_harness.server.agents import AgentManager
 from deep_harness.server.db import AppDB
-from deep_harness.server.routes import auth_router, files_router, threads_router
+from deep_harness.server.routes import (
+    auth_router,
+    files_router,
+    settings_router,
+    threads_router,
+)
 
 FRONTEND_DIST = Path(__file__).resolve().parents[3] / "frontend" / "dist"
 
@@ -29,7 +34,7 @@ def create_app(model: str | BaseChatModel | None = None) -> FastAPI:
         checkpoint_path = settings.workspace_dir / "checkpoints.db"
         async with AsyncSqliteSaver.from_conn_string(str(checkpoint_path)) as saver:
             app.state.db = AppDB(settings.workspace_dir / "app.db")
-            app.state.agents = AgentManager(checkpointer=saver, model=model)
+            app.state.agents = AgentManager(checkpointer=saver, db=app.state.db, model=model)
             yield
 
     app = FastAPI(title="Deep Harness Agent", version="0.1.0", lifespan=lifespan)
@@ -43,6 +48,7 @@ def create_app(model: str | BaseChatModel | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(threads_router)
     app.include_router(files_router)
+    app.include_router(settings_router)
 
     @app.get("/api/health")
     def health() -> dict:

@@ -31,6 +31,13 @@ export type StreamEvent =
   | { type: "error"; detail: string }
   | { type: "done" };
 
+export interface ComputeSettings {
+  compute_backend: "local" | "modal" | string;
+  gpu_type: string;
+  modal_token_id: string;
+  modal_token_secret_set: boolean;
+}
+
 export type ChatItem =
   | { kind: "user"; content: string }
   | { kind: "assistant"; content: string; source: string }

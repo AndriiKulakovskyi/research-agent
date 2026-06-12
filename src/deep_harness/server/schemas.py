@@ -50,3 +50,21 @@ class TodoItem(BaseModel):
 class FileEntry(BaseModel):
     path: str
     size: int
+
+
+class ComputeSettings(BaseModel):
+    """Read shape: the Modal token secret is never echoed, only its presence."""
+
+    compute_backend: str = "local"
+    gpu_type: str = "A10G"
+    modal_token_id: str = ""
+    modal_token_secret_set: bool = False
+
+
+class ComputeSettingsUpdate(BaseModel):
+    """Write shape: omit a token field (None) to keep the stored value."""
+
+    compute_backend: str = Field(pattern="^(local|modal)$")
+    gpu_type: str = Field(default="A10G", pattern="^(T4|L4|A10G|A100|H100)$")
+    modal_token_id: str | None = None
+    modal_token_secret: str | None = None

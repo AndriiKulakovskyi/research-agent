@@ -89,6 +89,7 @@ build_agent ┤
 | `src/deep_harness/prompts.py`, `subagents.py` | System prompts; specialist subagent roster |
 | `src/deep_harness/tools/` | Domain tools: database, variable semantics, knowledge graph, compute (`gpu_info`) |
 | `src/deep_harness/skills/` | Packaged skills (markdown API guides: `pytorch-training`, `gpu-data-science`) synced into every workspace |
+| `src/deep_harness/compute.py` | `run_training_job` routing: local subprocess vs Modal GPU sandbox, resolved per user at call time from Settings |
 | `src/deep_harness/config.py` | Env-driven settings (model, workspace, DB/dictionary/KG paths) |
 | `src/deep_harness/messages.py` | Shared message serialization (used by server stream and CLI) |
 | `src/deep_harness/cli.py` | Terminal entry point (developer tool, optional) |

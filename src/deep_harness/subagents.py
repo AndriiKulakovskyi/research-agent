@@ -20,7 +20,10 @@ from deep_harness.tools import (
 SKILL_SOURCES = ["/skills/"]
 
 
-def build_subagents() -> list[SubAgent]:
+def build_subagents(extra_compute_tools: list | None = None) -> list[SubAgent]:
+    """`extra_compute_tools` (e.g. the per-user run_training_job tool) are added
+    to the subagents that run heavy computation."""
+    compute_tools = [*COMPUTE_TOOLS, *(extra_compute_tools or [])]
     return [
         SubAgent(
             name="data-scientist",
@@ -30,7 +33,7 @@ def build_subagents() -> list[SubAgent]:
                 "analytical question and the relevant tables/files."
             ),
             system_prompt=prompts.DATA_SCIENTIST_PROMPT,
-            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *COMPUTE_TOOLS],
+            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *compute_tools],
             skills=SKILL_SOURCES,
         ),
         SubAgent(
@@ -42,7 +45,7 @@ def build_subagents() -> list[SubAgent]:
                 "data location, and acceptance metrics."
             ),
             system_prompt=prompts.ML_ENGINEER_PROMPT,
-            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *COMPUTE_TOOLS],
+            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *compute_tools],
             skills=SKILL_SOURCES,
         ),
         SubAgent(

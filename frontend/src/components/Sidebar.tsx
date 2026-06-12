@@ -8,9 +8,19 @@ interface Props {
   onNew: () => void;
   onDelete: (id: string) => void;
   onLogout: () => void;
+  onSettings: () => void;
 }
 
-export function Sidebar({ threads, activeId, username, onSelect, onNew, onDelete, onLogout }: Props) {
+export function Sidebar({
+  threads,
+  activeId,
+  username,
+  onSelect,
+  onNew,
+  onDelete,
+  onLogout,
+  onSettings,
+}: Props) {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -43,9 +53,14 @@ export function Sidebar({ threads, activeId, username, onSelect, onNew, onDelete
       </nav>
       <div className="sidebar-footer">
         <span className="muted">@{username}</span>
-        <button className="ghost small" onClick={onLogout}>
-          Sign out
-        </button>
+        <span>
+          <button className="ghost small" title="Compute settings" onClick={onSettings}>
+            ⚙ Settings
+          </button>
+          <button className="ghost small" onClick={onLogout}>
+            Sign out
+          </button>
+        </span>
       </div>
     </aside>
   );

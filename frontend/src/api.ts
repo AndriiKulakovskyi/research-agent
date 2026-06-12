@@ -1,4 +1,11 @@
-import type { FileEntry, HistoryMessage, StreamEvent, ThreadInfo, TodoItem } from "./types";
+import type {
+  ComputeSettings,
+  FileEntry,
+  HistoryMessage,
+  StreamEvent,
+  ThreadInfo,
+  TodoItem,
+} from "./types";
 
 const TOKEN_KEY = "deep-harness-token";
 const USER_KEY = "deep-harness-user";
@@ -68,6 +75,13 @@ export const deleteThread = (id: string) =>
 export const getHistory = (id: string) => request<HistoryMessage[]>(`/api/threads/${id}/messages`);
 export const getTodos = (id: string) => request<TodoItem[]>(`/api/threads/${id}/todos`);
 export const listFiles = () => request<FileEntry[]>("/api/files");
+export const getComputeSettings = () => request<ComputeSettings>("/api/settings");
+export const updateComputeSettings = (body: {
+  compute_backend: string;
+  gpu_type: string;
+  modal_token_id: string | null;
+  modal_token_secret: string | null;
+}) => request<ComputeSettings>("/api/settings", { method: "PUT", body: JSON.stringify(body) });
 
 export async function readFile(path: string): Promise<string> {
   const response = await fetch(`/api/files/${encodeURIComponent(path)}`, { headers: headers() });

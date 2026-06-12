@@ -11,6 +11,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 
+from deep_harness.compute import ComputeConfig, ConfigProvider, make_training_tool
 from deep_harness.config import Settings, get_settings, set_settings
 from deep_harness.prompts import MAIN_SYSTEM_PROMPT
 from deep_harness.subagents import SKILL_SOURCES, build_subagents
@@ -57,6 +58,7 @@ def build_agent(
     model: str | BaseChatModel | None = None,
     workspace_dir: Path | None = None,
     checkpointer: bool | BaseCheckpointSaver | None = True,
+    compute_config_provider: ConfigProvider | None = None,
 ) -> Any:
     """Create the compiled LangGraph deep agent.
 
@@ -67,6 +69,9 @@ def build_agent(
 
     `model` and `workspace_dir` override the settings — the server uses them to
     inject a per-user workspace (and tests use them to inject a fake model).
+    `compute_config_provider` is consulted at every `run_training_job` call to
+    decide where training jobs run (local host vs Modal GPU sandbox); the
+    server passes a per-user database lookup, the CLI defaults to env vars.
 
     Note: LocalShellBackend runs shell commands directly on this machine with
     no sandboxing — run the agent in a container/VM when working on untrusted
@@ -89,11 +94,14 @@ def build_agent(
     if checkpointer is True:
         checkpointer = InMemorySaver()
 
+    provider = compute_config_provider or ComputeConfig.from_env
+    training_tool = make_training_tool(root, provider)
+
     return create_deep_agent(
         model=model if model is not None else settings.model,
-        tools=ALL_TOOLS,
+        tools=[*ALL_TOOLS, training_tool],
         system_prompt=MAIN_SYSTEM_PROMPT,
-        subagents=build_subagents(),
+        subagents=build_subagents(extra_compute_tools=[training_tool]),
         backend=backend,
         skills=SKILL_SOURCES,
         memory=["/memory/AGENTS.md"],
