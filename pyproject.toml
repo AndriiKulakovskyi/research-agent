@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "deep-harness-agent"
+version = "0.1.0"
+description = "Deep harness agent for data science, engineering, coding, planning, and semantic database work (deepagents + LangGraph)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "deepagents>=0.6.8,<0.7",
+    "langgraph>=0.4",
+    "langchain>=1.0",
+    "langchain-anthropic>=0.3",
+    "sqlalchemy>=2.0",
+    "rdflib>=7.0",
+    "pandas>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+deep-harness = "deep_harness.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/deep_harness"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
