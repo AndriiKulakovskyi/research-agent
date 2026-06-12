@@ -118,6 +118,9 @@ print(result["messages"][-1].content)
 
 ## Architecture
 
+For the full step-by-step request lifecycle (and why `cli.py` exists alongside
+the server), see [docs/architecture.md](docs/architecture.md).
+
 ```
 React UI (frontend/)  ──HTTP/SSE──▶  FastAPI (src/deep_harness/server/)
   chat · plan panel · file browser     auth · threads · streaming · files
