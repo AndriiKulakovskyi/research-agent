@@ -133,6 +133,30 @@ and version.
   rooted in the workspace but unsandboxed. Run it inside a container/VM for
   untrusted tasks or data.
 
+## Self-contained by design (no LangChain cloud services)
+
+The app has **one** external runtime dependency: the LLM API (Anthropic by
+default). Everything else runs in-process or on local files:
+
+- **LangGraph is used as an open-source library**, not as LangGraph Platform —
+  no `langgraph-api` server, no `langgraph.json`, no platform account.
+- **No LangSmith required.** Tracing is off by default (`langsmith` ships as a
+  transitive dependency but makes no network calls unless you explicitly set
+  `LANGSMITH_TRACING=true` + an API key). Don't set those vars and nothing
+  leaves your infrastructure.
+- **State is local files**: LangGraph checkpoints, users/threads, the data
+  dictionary, and the knowledge graph are SQLite/JSON/Turtle files under
+  `workspace/` — swappable to Postgres via `langgraph-checkpoint-postgres`
+  when you outgrow SQLite.
+- **The UI is ours**, served by FastAPI — no dependency on `deep-agents-ui`
+  or its LangGraph Server protocol.
+- Even the model is swappable: `DEEP_AGENT_MODEL` takes any
+  `provider:model` string supported by `init_chat_model` (including local
+  models, e.g. `ollama:...`), making a fully air-gapped deployment possible.
+
+The test suite is the proof: all 12 tests, including a full chat round-trip
+over SSE, run with a fake model and no API keys or network access.
+
 ## Development
 
 ```bash
