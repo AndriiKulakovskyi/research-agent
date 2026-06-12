@@ -52,6 +52,12 @@ def test_register_login_me(client):
     assert client.get("/api/auth/me").status_code == 401
 
 
+def test_logout_revokes_token(client):
+    headers = _auth(client)
+    assert client.post("/api/auth/logout", headers=headers).status_code == 204
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+
+
 def test_thread_lifecycle_and_chat(client):
     headers = _auth(client)
     thread = client.post("/api/threads", json={}, headers=headers).json()

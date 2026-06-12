@@ -54,6 +54,17 @@ def me(user: CurrentUser = Depends(get_current_user)) -> UserInfo:
     return UserInfo(id=user.id, username=user.username)
 
 
+@auth_router.post("/logout", status_code=204)
+def logout(
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+) -> None:
+    """Revoke the bearer token used for this request."""
+    authorization = request.headers.get("authorization", "")
+    token = authorization.removeprefix("Bearer ").strip()
+    request.app.state.db.delete_token(auth_mod.hash_token(token))
+
+
 # -- threads -------------------------------------------------------------------
 
 

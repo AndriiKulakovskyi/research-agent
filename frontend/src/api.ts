@@ -51,6 +51,15 @@ export async function authenticate(
   localStorage.setItem(USER_KEY, data.username);
 }
 
+export async function logout(): Promise<void> {
+  // Revoke server-side first; clear local credentials regardless of outcome.
+  try {
+    await fetch("/api/auth/logout", { method: "POST", headers: headers() });
+  } finally {
+    clearAuth();
+  }
+}
+
 export const listThreads = () => request<ThreadInfo[]>("/api/threads");
 export const createThread = () =>
   request<ThreadInfo>("/api/threads", { method: "POST", body: JSON.stringify({}) });

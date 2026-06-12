@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  clearAuth,
   createThread,
   deleteThread,
   getHistory,
@@ -8,6 +7,7 @@ import {
   getTodos,
   getUsername,
   listThreads,
+  logout,
   streamMessage,
 } from "./api";
 import { Chat } from "./components/Chat";
@@ -159,8 +159,7 @@ export default function App() {
         onNew={newThread}
         onDelete={removeThread}
         onLogout={() => {
-          clearAuth();
-          setAuthed(false);
+          logout().finally(() => setAuthed(false));
         }}
       />
       <Chat items={items} streamingText={streamingText} busy={busy} onSend={send} />

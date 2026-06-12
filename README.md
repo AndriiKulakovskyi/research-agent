@@ -68,6 +68,21 @@ docker run -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... -v deep-harness-data:/da
 | `GET /api/threads/{id}/messages` · `/todos` | History and current plan from the checkpointer |
 | `GET /api/files` · `/api/files/{path}` | Browse the user's workspace artifacts |
 
+## Examples
+
+| Example | Shows |
+|---|---|
+| `examples/seed_demo.py` | Seed a demo SQLite DB, data dictionary, and knowledge graph |
+| `examples/api_walkthrough.py` | Full HTTP API flow in Python: register → thread → SSE-streamed task → history/plan/artifacts → cleanup |
+| `examples/curl_walkthrough.sh` | The same flow from the shell with curl + jq |
+| `examples/library_usage.py` | Embedding the agent in your own code: one-shot, multi-turn threads, streaming with tool visibility |
+
+```bash
+deep-harness-server                      # terminal 1
+python examples/seed_demo.py             # terminal 2
+python examples/api_walkthrough.py
+```
+
 ## CLI quick start
 
 ```bash
