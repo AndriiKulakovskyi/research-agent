@@ -21,6 +21,10 @@ The agent works *semantics-first*: it consults the data dictionary before queryi
 unfamiliar columns, records newly learned variable meanings back into the dictionary,
 and captures durable relationships (lineage, concept links) in the knowledge graph.
 
+It ships as a **full multi-user application**: a FastAPI backend (token auth,
+per-user workspaces, persistent threads, SSE streaming) and a React UI (chat
+with live agent activity, plan panel, workspace file browser).
+
 ## Setup
 
 ```bash
@@ -28,7 +32,43 @@ pip install -e ".[dev]"
 cp .env.example .env   # add your ANTHROPIC_API_KEY
 ```
 
-## Quick start
+## Run the application (backend + UI)
+
+```bash
+# Build the UI once (Node 20+)
+cd frontend && npm install && npm run build && cd ..
+
+# Start the server — serves the API and the built UI on :8000
+deep-harness-server
+```
+
+Open http://localhost:8000, create an account, and start a conversation.
+Each user gets isolated threads and an isolated workspace directory under
+`workspace/users/<user_id>/`; the analytics database, data dictionary, and
+knowledge graph are shared org-wide. Conversation state persists across
+restarts in a SQLite LangGraph checkpointer (`workspace/checkpoints.db`).
+
+For UI development with hot reload: `cd frontend && npm run dev` (proxies
+`/api` to `localhost:8000`).
+
+With Docker:
+
+```bash
+docker build -t deep-harness .
+docker run -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... -v deep-harness-data:/data deep-harness
+```
+
+### API surface
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/auth/register` · `/login` | Create account / get bearer token |
+| `GET/POST /api/threads` · `DELETE /api/threads/{id}` | Manage conversations |
+| `POST /api/threads/{id}/messages` | Send a message; agent run streams back as SSE (`token`, `tool_call`, `tool_result`, `todos`, `message`, `done`) |
+| `GET /api/threads/{id}/messages` · `/todos` | History and current plan from the checkpointer |
+| `GET /api/files` · `/api/files/{path}` | Browse the user's workspace artifacts |
+
+## CLI quick start
 
 ```bash
 # Seed a demo SQLite database, data dictionary, and knowledge graph
@@ -64,6 +104,11 @@ print(result["messages"][-1].content)
 ## Architecture
 
 ```
+React UI (frontend/)  ──HTTP/SSE──▶  FastAPI (src/deep_harness/server/)
+  chat · plan panel · file browser     auth · threads · streaming · files
+                                          │  per-user agent instances,
+                                          │  shared SQLite checkpointer
+                                          ▼
 deep-harness (orchestrator, Claude Opus 4.8)
 ├── built-ins: write_todos · ls/read/write/edit/glob/grep · execute (shell) · task
 ├── domain tools: run_sql · describe_table · list_tables
