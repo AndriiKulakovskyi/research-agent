@@ -14,6 +14,7 @@ from deep_harness.tools import (
     COMPUTE_TOOLS,
     DATABASE_TOOLS,
     KNOWLEDGE_GRAPH_TOOLS,
+    RESEARCH_TOOLS,
     SEMANTICS_TOOLS,
 )
 
@@ -47,6 +48,19 @@ def build_subagents(extra_compute_tools: list | None = None) -> list[SubAgent]:
             system_prompt=prompts.ML_ENGINEER_PROMPT,
             tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *compute_tools],
             skills=SKILL_SOURCES,
+        ),
+        SubAgent(
+            name="research-analyst",
+            description=(
+                "Research analyst for literature reviews and deep research — "
+                "searches arXiv, Semantic Scholar, and the web, reads sources, "
+                "and returns a synthesized, citation-backed review. Use BEFORE "
+                "designing an algorithmic methodology; give it one focused "
+                "question per invocation (up to 3 in parallel for multi-faceted "
+                "topics)."
+            ),
+            system_prompt=prompts.RESEARCH_ANALYST_PROMPT,
+            tools=[*RESEARCH_TOOLS],
         ),
         SubAgent(
             name="data-engineer",

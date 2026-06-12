@@ -90,6 +90,8 @@ build_agent ┤
 | `src/deep_harness/tools/` | Domain tools: database, variable semantics, knowledge graph, compute (`gpu_info`) |
 | `src/deep_harness/skills/` | Packaged skills (markdown API guides: `pytorch-training`, `gpu-data-science`) synced into every workspace |
 | `src/deep_harness/compute.py` | `run_training_job` routing: local subprocess vs Modal GPU sandbox, resolved per user at call time from Settings |
+| `src/deep_harness/research_server.py` | Agent Protocol server hosting the research analyst as an async background subagent (`RESEARCH_SERVER_URL`) |
+| `src/deep_harness/tools/research.py` | Literature/deep-research tools: arXiv, Semantic Scholar, optional Tavily, `fetch_url`, `think_tool` |
 | `src/deep_harness/config.py` | Env-driven settings (model, workspace, DB/dictionary/KG paths) |
 | `src/deep_harness/messages.py` | Shared message serialization (used by server stream and CLI) |
 | `src/deep_harness/cli.py` | Terminal entry point (developer tool, optional) |

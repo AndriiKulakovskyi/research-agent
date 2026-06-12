@@ -11,10 +11,15 @@ def message_text(message: Any) -> str:
     """Extract plain text from a message across langchain-core versions
     (`.text` may be a property or a method) and content-block shapes."""
     text = getattr(message, "text", None)
-    if callable(text):
-        text = text()
-    if isinstance(text, str) and text:
-        return text
+    # langchain-core 1.x: .text is a str-subclass property that warns if called;
+    # older versions: a method. Check str first to avoid the deprecated call.
+    if isinstance(text, str):
+        if text:
+            return str(text)
+    elif callable(text):
+        result = text()
+        if isinstance(result, str) and result:
+            return result
     content = getattr(message, "content", "")
     if isinstance(content, str):
         return content

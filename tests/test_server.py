@@ -4,30 +4,15 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
-from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage
 
 from deep_harness.server.app import create_app
-
-
-class _ToolBindingFakeModel(GenericFakeChatModel):
-    """GenericFakeChatModel raises NotImplementedError on bind_tools, which the
-    deep-agent harness always calls; accept and ignore the tools instead."""
-
-    def bind_tools(self, tools, **kwargs):
-        return self
-
-
-def _fake_model():
-    # One assistant reply per invocation; no tool calls keeps the run single-step.
-    return _ToolBindingFakeModel(
-        messages=iter([AIMessage(content="Revenue is up 12%.")] * 20)
-    )
+from tests.conftest import make_fake_model
 
 
 @pytest.fixture
 def client(settings):
-    app = create_app(model=_fake_model())
+    # One assistant reply per invocation; no tool calls keeps runs single-step.
+    app = create_app(model=make_fake_model())
     with TestClient(app) as c:
         yield c
 

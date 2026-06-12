@@ -23,6 +23,9 @@ class Settings:
         DATABASE_URL          SQLAlchemy URL of the database the agent works with
         DATA_DICTIONARY_PATH  JSON file holding variable semantics (the data dictionary)
         KNOWLEDGE_GRAPH_PATH  Turtle file persisting the RDF knowledge graph
+        RESEARCH_SERVER_URL   Agent Protocol URL of the async research server
+                              (deep-harness-research-server); empty disables
+                              async research delegation
     """
 
     model: str = DEFAULT_MODEL
@@ -30,6 +33,7 @@ class Settings:
     database_url: str = ""
     data_dictionary_path: Path = field(default_factory=lambda: Path("workspace/data_dictionary.json"))
     knowledge_graph_path: Path = field(default_factory=lambda: Path("workspace/knowledge_graph.ttl"))
+    research_server_url: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -44,6 +48,7 @@ class Settings:
             knowledge_graph_path=Path(
                 os.environ.get("KNOWLEDGE_GRAPH_PATH", str(workspace / "knowledge_graph.ttl"))
             ),
+            research_server_url=os.environ.get("RESEARCH_SERVER_URL", ""),
         )
 
     def ensure_workspace(self) -> None:

@@ -97,10 +97,38 @@ def build_agent(
     provider = compute_config_provider or ComputeConfig.from_env
     training_tool = make_training_tool(root, provider)
 
+    # With a research server configured, the agent also gets async task tools
+    # (start/check/update/cancel) to run literature research in the background
+    # on the Agent Protocol server while it keeps working.
+    middleware = []
+    if settings.research_server_url:
+        from deepagents import AsyncSubAgentMiddleware
+
+        from deep_harness.research_server import GRAPH_ID
+
+        middleware.append(
+            AsyncSubAgentMiddleware(
+                async_subagents=[
+                    {
+                        "name": "async-researcher",
+                        "description": (
+                            "Background research analyst (runs on a separate server): "
+                            "literature reviews over arXiv/Semantic Scholar/web with "
+                            "citations. Kick it off, keep working, check back for the "
+                            "report."
+                        ),
+                        "graph_id": GRAPH_ID,
+                        "url": settings.research_server_url,
+                    }
+                ],
+            )
+        )
+
     return create_deep_agent(
         model=model if model is not None else settings.model,
         tools=[*ALL_TOOLS, training_tool],
         system_prompt=MAIN_SYSTEM_PROMPT,
+        middleware=middleware,
         subagents=build_subagents(extra_compute_tools=[training_tool]),
         backend=backend,
         skills=SKILL_SOURCES,

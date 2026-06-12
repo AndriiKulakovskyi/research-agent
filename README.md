@@ -17,6 +17,8 @@ The harness combines the deepagents built-ins with domain tools and specialist s
 | **Knowledge graph** | An RDF graph (rdflib, persisted as Turtle): `kg_add`, `kg_describe`, `kg_sparql`, `kg_stats` for entities, concept hierarchies, and data lineage |
 | **AI/ML on GPU** | `gpu_info` hardware detection + packaged skills (`pytorch-training`, `gpu-data-science` for RAPIDS cuDF/cuML); the agent writes device-agnostic code that uses a GPU when present and falls back to CPU |
 | **Compute routing** | `run_training_job` executes training scripts on the backend each user picks in ⚙ Settings: the app host (local CPU/GPU) or a remote **Modal** GPU sandbox (T4/L4/A10G/A100/H100) with `outputs/` synced back to the workspace |
+| **Deep research** | `research-analyst` subagent runs literature reviews before methodology design: keyless arXiv + Semantic Scholar search, optional Tavily web search, `fetch_url`, and the `think_tool` reflection loop; citation-backed reviews saved under `research/` |
+| **Async research** | Optional Agent Protocol server (`deep-harness-research-server`) hosts the researcher as a background subagent — the main agent starts a review with `start_async_task`, keeps working (e.g. preparing data), and collects the report with `check_async_task` |
 | **Self-improving memory** | A per-workspace `memory/AGENTS.md` loaded into the system prompt at startup; the agent records durable lessons there as it works |
 | **Delegation** | Subagents via `task`: `data-scientist`, `ml-engineer`, `data-engineer`, `software-engineer`, `knowledge-engineer` |
 
@@ -162,6 +164,30 @@ Each user chooses in **⚙ Settings** (UI) where `run_training_job` executes:
   `outputs/` back into the user's workspace.
 
 Settings are per user, applied to the next job without restarting anything.
+
+### Deep research & async subagents
+
+Literature research runs in two modes:
+
+- **Synchronous (always available):** the orchestrator delegates to the
+  `research-analyst` subagent via `task`. It searches arXiv and Semantic
+  Scholar (no API keys needed), optionally the web (set `TAVILY_API_KEY`),
+  reads sources with `fetch_url`, reflects between rounds with `think_tool`,
+  and returns a citation-backed review saved under `research/`.
+- **Asynchronous (optional):** run the researcher as a separate Agent Protocol
+  server and point the app at it:
+
+  ```bash
+  deep-harness-research-server                       # port 8010
+  RESEARCH_SERVER_URL=http://localhost:8010 deep-harness-server
+  ```
+
+  The main agent then gets `start_async_task` / `check_async_task` /
+  `update_async_task` / `cancel_async_task` tools (deepagents
+  `AsyncSubAgentMiddleware`): it can kick off a literature review, continue
+  preparing data or schemas while the review runs on the other server, and
+  pull in the report when ready. Wire compatibility with the LangGraph SDK
+  client is integration-tested.
 The CLI uses `DEEP_AGENT_COMPUTE` / `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET`
 env vars instead. Modal support needs the optional extra:
 `pip install -e ".[modal]"`. Note: the Modal path is implemented defensively
