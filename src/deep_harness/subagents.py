@@ -10,10 +10,21 @@ from __future__ import annotations
 from deepagents import SubAgent
 
 from deep_harness import prompts
-from deep_harness.tools import DATABASE_TOOLS, KNOWLEDGE_GRAPH_TOOLS, SEMANTICS_TOOLS
+from deep_harness.tools import (
+    COMPUTE_TOOLS,
+    DATABASE_TOOLS,
+    KNOWLEDGE_GRAPH_TOOLS,
+    RESEARCH_TOOLS,
+    SEMANTICS_TOOLS,
+)
+
+SKILL_SOURCES = ["/skills/"]
 
 
-def build_subagents() -> list[SubAgent]:
+def build_subagents(extra_compute_tools: list | None = None) -> list[SubAgent]:
+    """`extra_compute_tools` (e.g. the per-user run_training_job tool) are added
+    to the subagents that run heavy computation."""
+    compute_tools = [*COMPUTE_TOOLS, *(extra_compute_tools or [])]
     return [
         SubAgent(
             name="data-scientist",
@@ -23,7 +34,33 @@ def build_subagents() -> list[SubAgent]:
                 "analytical question and the relevant tables/files."
             ),
             system_prompt=prompts.DATA_SCIENTIST_PROMPT,
-            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS],
+            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *compute_tools],
+            skills=SKILL_SOURCES,
+        ),
+        SubAgent(
+            name="ml-engineer",
+            description=(
+                "Machine-learning engineer for designing, implementing, training, "
+                "and evaluating AI algorithms (classical ML and neural networks), "
+                "GPU-accelerated when hardware allows. Give it the objective, the "
+                "data location, and acceptance metrics."
+            ),
+            system_prompt=prompts.ML_ENGINEER_PROMPT,
+            tools=[*DATABASE_TOOLS, *SEMANTICS_TOOLS, *compute_tools],
+            skills=SKILL_SOURCES,
+        ),
+        SubAgent(
+            name="research-analyst",
+            description=(
+                "Research analyst for literature reviews and deep research — "
+                "searches arXiv, Semantic Scholar, and the web, reads sources, "
+                "and returns a synthesized, citation-backed review. Use BEFORE "
+                "designing an algorithmic methodology; give it one focused "
+                "question per invocation (up to 3 in parallel for multi-faceted "
+                "topics)."
+            ),
+            system_prompt=prompts.RESEARCH_ANALYST_PROMPT,
+            tools=[*RESEARCH_TOOLS],
         ),
         SubAgent(
             name="data-engineer",

@@ -72,6 +72,16 @@ def test_knowledge_graph(settings):
     assert settings.knowledge_graph_path.exists()
 
 
+def test_gpu_info_reports_environment(settings):
+    from deep_harness.tools.compute import gpu_info
+
+    report = gpu_info.invoke({})
+    assert "CPU cores:" in report
+    assert "Libraries:" in report
+    # On any host the report must end with actionable guidance
+    assert "Guidance:" in report
+
+
 def test_kg_plain_labels_slugified(settings):
     kg_add.invoke(
         {"subject": "total amount", "predicate": "relates to", "object": "revenue concept"}

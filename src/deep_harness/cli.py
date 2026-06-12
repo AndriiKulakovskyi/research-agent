@@ -8,32 +8,32 @@ import sys
 import uuid
 
 from deep_harness.agent import build_agent
+from deep_harness.messages import PREVIEW_CHARS, message_text
 
 
 def _print_update(update: dict) -> None:
-    """Pretty-print messages from a stream update without flooding the terminal."""
-    for node, payload in update.items():
+    """Render one stream update: assistant text to stdout, activity to stderr."""
+    for _node, payload in update.items():
         if not isinstance(payload, dict):
             continue
-        for message in payload.get("messages", []):
-            msg_type = getattr(message, "type", "")
-            if msg_type == "ai":
-                for chunk in getattr(message, "content_blocks", None) or []:
-                    if chunk.get("type") == "text" and chunk.get("text"):
-                        print(f"\n{chunk['text']}")
-                    elif chunk.get("type") == "tool_call":
-                        print(f"  [{node}] -> {chunk.get('name')}", file=sys.stderr)
-            elif msg_type == "tool":
-                name = getattr(message, "name", "tool")
-                text = str(getattr(message, "content", ""))
-                preview = text[:200].replace("\n", " ")
-                print(f"  [{name}] {preview}{'...' if len(text) > 200 else ''}", file=sys.stderr)
+        for message in payload.get("messages", []) or []:
+            kind = getattr(message, "type", "")
+            if kind == "ai":
+                for tc in getattr(message, "tool_calls", None) or []:
+                    print(f"  -> {tc.get('name')}", file=sys.stderr)
+                text = message_text(message)
+                if text:
+                    print(f"\n{text}")
+            elif kind == "tool":
+                name = getattr(message, "name", None) or "tool"
+                preview = message_text(message)[:PREVIEW_CHARS].replace("\n", " ")
+                print(f"  [{name}] {preview}", file=sys.stderr)
 
 
 def run_turn(agent, user_input: str, thread_id: str) -> None:
     config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 250}
     state = {"messages": [{"role": "user", "content": user_input}]}
-    for update in agent.stream(state, config=config, stream_mode="updates", subgraphs=False):
+    for update in agent.stream(state, config=config, stream_mode="updates"):
         _print_update(update)
 
 
@@ -46,7 +46,9 @@ def main() -> None:
         ),
     )
     parser.add_argument("task", nargs="?", help="one-shot task; omit for interactive mode")
-    parser.add_argument("--model", help="override model (provider:model), e.g. anthropic:claude-opus-4-8")
+    parser.add_argument(
+        "--model", help="override model (provider:model), e.g. anthropic:claude-opus-4-8"
+    )
     args = parser.parse_args()
 
     if args.model:
