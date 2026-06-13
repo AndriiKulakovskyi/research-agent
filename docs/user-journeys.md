@@ -13,11 +13,13 @@ python examples/seed_demo.py      # terminal 2 — seed the demo DB/dictionary/K
 # open http://localhost:8000, register, start a thread
 ```
 
-The three journeys go from shallow to deep:
+The journeys go from shallow to deep:
 
 1. **Quick analytics question** — one prompt, an answer with a chart, minutes.
 2. **A research initiative** — the full survey → plan → experiment → readout loop.
 3. **Onboarding a new database** — making an undocumented dataset queryable.
+4. **GPU/PyTorch training with iterative debugging** — heavy coding: write a real
+   training script, run it on the configured compute, debug failures across turns.
 
 ---
 
@@ -188,6 +190,97 @@ your data the more it's used.
 > knowledge down in human-reviewable files, and models relationships once so
 > nobody re-derives them. `run_sql` stays read-only throughout — any actual data
 > change would be a reviewed script the agent writes and runs explicitly.
+
+---
+
+## Journey 4 — GPU/PyTorch training with iterative debugging
+
+**Who:** an ML engineer who wants a neural net trained, evaluated against a
+baseline, and the run tracked — and who expects the agent to *write and debug
+real code across turns*, not hand back a snippet. This is the heavy-coding path.
+
+> **This journey is verified executable.** The exact tool path below
+> (`gpu_info` → write a device-agnostic PyTorch script → `run_training_job`
+> on the local backend → `log_experiment` → `list_experiments`) was run on a
+> CPU-only host with `torch` installed: the script auto-fell back to CPU,
+> trained, and wrote `outputs/metrics.json` (test accuracy vs. majority
+> baseline), `outputs/loss_curve.png`, and 25 epoch checkpoints, all logged to
+> the registry. On a CUDA host the same script runs on the GPU unchanged.
+
+**What they type:**
+
+> Train a small neural net to classify [the task] from our data. Use the GPU if
+> we have one, compare it against a sensible baseline, and log the run.
+
+**What happens, turn by turn:**
+
+1. **Inspect the hardware (always first).** The agent calls `gpu_info`. It
+   reports NVIDIA GPUs (via `nvidia-smi`), CPU cores, RAM, and which libraries
+   are present — and critically, on a torch install it reports
+   `torch.cuda.is_available()`. This is what tells the agent whether to write
+   for GPU or plan a CPU fallback, and to size the batch to the reported VRAM.
+2. **Read the skill, then write the script.** Per its instructions it reads the
+   `pytorch-training` skill before writing model code, then writes a **real,
+   device-agnostic** training script into the workspace (not inline):
+   - `device = torch.device("cuda" if torch.cuda.is_available() else "cpu")` —
+     never hardcoded `"cuda"`; model and every batch moved to `device`.
+   - AMP **guarded by device type**: `GradScaler(enabled=device.type=="cuda")`
+     and `autocast(device_type=device.type, enabled=device.type=="cuda")`, so
+     the identical script is correct on both GPU and CPU.
+   - Writes all artifacts under **`outputs/`** (metrics JSON, a matplotlib loss
+     curve PNG) and **`checkpoints/`** (per-epoch `.pt`), and seeds RNGs for
+     reproducibility.
+3. **Validate on a subset first.** Following the skill's workflow rule, it first
+   runs the pipeline end-to-end on a small subset / 1 epoch with `execute` to
+   catch shape and device bugs cheaply — *before* committing to a full run.
+4. **Iterative debugging (the multi-turn part).** Real training code rarely runs
+   clean the first time, and the agent works the loop instead of giving up:
+   - A **tensor/shape or dtype error** (e.g. `CrossEntropyLoss` wants `long`
+     class indices, or a logits-vs-labels shape mismatch) shows up in the
+     `tool_result` stderr; the agent reads the traceback, edits the script, and
+     re-runs.
+   - A **`requires_grad` / detach warning** when logging the loss → it switches
+     to `loss.detach()` / `float(loss.item())`. *(This exact warning surfaced
+     during verification and is a representative fix.)*
+   - **CUDA out-of-memory** on a GPU host → per the skill it responds in order:
+     halve the batch size, then gradient accumulation, then reduce model width —
+     re-running after each change until it fits.
+
+   Each iteration is a visible `execute` call in the activity stream, so you
+   watch the bug → fix → re-run loop happen.
+5. **Run the real job.** Once the pipeline is clean it launches the full run with
+   **`run_training_job`** rather than `execute`. This routes to the backend the
+   user picked in ⚙ Settings:
+   - **Local** — a subprocess on the app host (uses the host GPU if present).
+   - **Modal** — a remote GPU sandbox (T4/L4/A10G/A100/H100). The agent lists the
+     script's `data_files` and `pip_packages`; the sandbox installs them, runs on
+     the chosen GPU, and **everything the script wrote to `outputs/` is downloaded
+     back** into the workspace. (Failures come back as readable text — missing
+     token, package not installed — so the agent can adapt rather than crash.)
+
+   The tool enforces the script is inside the workspace and creates `outputs/`
+   for you; stdout/stderr (tail) come back so the agent can react.
+6. **Evaluate honestly against a baseline.** It reports **held-out accuracy vs. a
+   naive baseline** (majority class / linear model) — never the model's number
+   alone. In the verification run that was test accuracy ≈0.92 vs. a 0.50
+   majority baseline; if a model failed to beat baseline the agent says so.
+7. **Track the run.** It calls `log_experiment` with the metrics (baseline
+   included), hyperparameters, and artifact paths (`outputs/metrics.json`,
+   `outputs/loss_curve.png`). The run appears in the UI **Experiments tab**, the
+   loss curve renders in the file viewer, and the entry is appended to the
+   plain-text `experiments/registry.jsonl`. It checks `list_experiments` before
+   any near-duplicate run so it builds on prior results instead of redoing them.
+
+**What persists:** the training script, `outputs/` artifacts, `checkpoints/`,
+and the experiment registry — all on disk, surviving restarts. Lessons from the
+debugging (e.g. "this dataset needs class weights") go into `memory/AGENTS.md`.
+
+> **Behaviour to expect:** the agent *writes and runs real code and debugs it
+> across turns*. It checks hardware before writing a line, keeps code
+> device-agnostic so GPU/CPU and local/Modal are the same script, validates
+> small before scaling, reads tracebacks and fixes them rather than apologizing,
+> and refuses to present a model as good without a baseline comparison. Heavy
+> runs go through `run_training_job` (your chosen backend), every run is logged.
 
 ---
 

@@ -124,8 +124,9 @@ print(result["messages"][-1].content)
 
 ## Architecture
 
-For three end-to-end walkthroughs of what to expect — a quick analytics
-question, a full research initiative, and onboarding a new database — see
+For four end-to-end walkthroughs of what to expect — a quick analytics
+question, a full research initiative, onboarding a new database, and a
+GPU/PyTorch training-and-debugging session — see
 [docs/user-journeys.md](docs/user-journeys.md). For the full step-by-step
 request lifecycle (and why `cli.py` exists alongside the server), see
 [docs/architecture.md](docs/architecture.md). For how a research initiative
