@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
@@ -70,3 +72,15 @@ def settings(tmp_path):
     set_settings(s)
     yield s
     set_settings(None)
+
+
+@pytest.fixture
+def real_api_key():
+    """Skip unless a real Anthropic key is configured (opt-in for live e2e).
+
+    The offline build test uses the literal ``"test-key"`` as a placeholder, so
+    treat that value the same as an absent key."""
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key or key == "test-key":
+        pytest.skip("ANTHROPIC_API_KEY not set; skipping live-API e2e test")
+    return key
