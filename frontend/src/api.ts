@@ -3,6 +3,8 @@ import type {
   ExperimentRecord,
   FileEntry,
   HistoryMessage,
+  Initiative,
+  InitiativeStatus,
   StreamEvent,
   ThreadInfo,
   TodoItem,
@@ -69,10 +71,35 @@ export async function logout(): Promise<void> {
 }
 
 export const listThreads = () => request<ThreadInfo[]>("/api/threads");
-export const createThread = () =>
-  request<ThreadInfo>("/api/threads", { method: "POST", body: JSON.stringify({}) });
+export const createThread = (initiativeId?: string | null) =>
+  request<ThreadInfo>("/api/threads", {
+    method: "POST",
+    body: JSON.stringify(initiativeId ? { initiative_id: initiativeId } : {}),
+  });
 export const deleteThread = (id: string) =>
   request<void>(`/api/threads/${id}`, { method: "DELETE" });
+export const setThreadInitiative = (id: string, initiativeId: string | null) =>
+  request<ThreadInfo>(`/api/threads/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ initiative_id: initiativeId }),
+  });
+
+export const listInitiatives = () => request<Initiative[]>("/api/initiatives");
+export const createInitiative = (name: string, goal = "") =>
+  request<Initiative>("/api/initiatives", {
+    method: "POST",
+    body: JSON.stringify({ name, goal }),
+  });
+export const updateInitiative = (
+  id: string,
+  patch: { name?: string; goal?: string; status?: InitiativeStatus },
+) =>
+  request<Initiative>(`/api/initiatives/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+export const deleteInitiative = (id: string) =>
+  request<void>(`/api/initiatives/${id}`, { method: "DELETE" });
 export const getHistory = (id: string) => request<HistoryMessage[]>(`/api/threads/${id}/messages`);
 export const getTodos = (id: string) => request<TodoItem[]>(`/api/threads/${id}/todos`);
 export const listFiles = () => request<FileEntry[]>("/api/files");
@@ -87,7 +114,10 @@ export const updateComputeSettings = (body: {
   gate_shell: boolean;
 }) => request<ComputeSettings>("/api/settings", { method: "PUT", body: JSON.stringify(body) });
 
-export const listExperiments = () => request<ExperimentRecord[]>("/api/experiments");
+export const listExperiments = (initiativeId?: string | null) =>
+  request<ExperimentRecord[]>(
+    initiativeId ? `/api/experiments?initiative_id=${encodeURIComponent(initiativeId)}` : "/api/experiments",
+  );
 
 export interface FileContent {
   kind: "text" | "image";

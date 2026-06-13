@@ -1,8 +1,22 @@
 export interface ThreadInfo {
   id: string;
   title: string;
+  initiative_id?: string | null;
   created_at: number;
   updated_at: number;
+}
+
+export type InitiativeStatus = "active" | "completed" | "archived";
+
+export interface Initiative {
+  id: string;
+  name: string;
+  goal: string;
+  status: InitiativeStatus;
+  created_at: number;
+  updated_at: number;
+  thread_count: number;
+  experiment_count: number;
 }
 
 export interface TodoItem {
@@ -58,6 +72,8 @@ export interface ExperimentRecord {
   params: Record<string, unknown>;
   artifacts: string[];
   notes: string;
+  initiative_id?: string | null;
+  initiative_name?: string | null;
 }
 
 export type ChatItem =

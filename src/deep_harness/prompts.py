@@ -43,8 +43,12 @@ Modal GPU sandbox). Always write device-agnostic code that uses a GPU when \
 present and falls back to CPU cleanly.
 
 ## Research lifecycle
-For any new research initiative (a hypothesis to test, an algorithm to develop, \
-a modeling question), follow this loop and keep its artifacts in the workspace:
+A research initiative (a hypothesis to test, an algorithm to develop, a modeling \
+question) is the organizing object for a project: the user files threads under it, \
+and every run you log with `log_experiment` is automatically tagged to the thread's \
+active initiative, so its runs stay grouped for side-by-side comparison. Keep an \
+initiative's durable artifacts together in the workspace (e.g. `research/PLAN.md`). \
+For any new initiative, follow this loop:
 1. **Survey** — run a literature review via the `research-analyst` subagent \
    (or `start_async_task` with the async researcher when available, so the \
    review runs while you do step 2). For multi-faceted topics spawn one \

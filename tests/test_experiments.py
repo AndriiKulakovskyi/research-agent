@@ -26,6 +26,27 @@ def test_log_and_list_experiments(tmp_path):
     assert "No experiments" in list_.invoke({"name_filter": "nonexistent"})
 
 
+def test_experiment_auto_tagged_from_run_config(tmp_path):
+    log, _ = make_experiment_tools(tmp_path)
+    # The run config carries the thread's active initiative; the tool tags the
+    # record without the model passing anything.
+    log.invoke(
+        {"name": "tagged-run", "metrics": {"auc": 0.9}},
+        config={"configurable": {"initiative_id": "init-1", "initiative_name": "Churn"}},
+    )
+    # A run from a thread with no initiative stays untagged.
+    log.invoke({"name": "untagged-run", "metrics": {"auc": 0.8}})
+
+    records = {r["name"]: r for r in read_registry(tmp_path)}
+    assert records["tagged-run"]["initiative_id"] == "init-1"
+    assert records["tagged-run"]["initiative_name"] == "Churn"
+    assert records["untagged-run"]["initiative_id"] is None
+
+    # read_registry filters by initiative, excluding untagged and legacy records.
+    scoped = read_registry(tmp_path, initiative_id="init-1")
+    assert [r["name"] for r in scoped] == ["tagged-run"]
+
+
 def test_registry_survives_corrupt_lines(tmp_path):
     log, list_ = make_experiment_tools(tmp_path)
     log.invoke({"name": "run-a", "metrics": {"f1": 0.5}})

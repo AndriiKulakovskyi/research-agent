@@ -25,10 +25,20 @@ CREATE TABLE IF NOT EXISTS tokens (
     user_id TEXT NOT NULL REFERENCES users(id),
     created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS initiatives (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    goal TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS threads (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id),
     title TEXT NOT NULL,
+    initiative_id TEXT REFERENCES initiatives(id),
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
@@ -63,10 +73,17 @@ class AppDB:
             self._migrate(conn)
 
     def _migrate(self, conn: sqlite3.Connection) -> None:
-        existing = {row["name"] for row in conn.execute("PRAGMA table_info(user_settings)")}
+        """Idempotent in-place migrations for columns `CREATE TABLE IF NOT EXISTS`
+        cannot add to tables that already exist in older deployments."""
+        settings_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(user_settings)")
+        }
         for column, ddl in _USER_SETTINGS_MIGRATIONS.items():
-            if column not in existing:
+            if column not in settings_columns:
                 conn.execute(f"ALTER TABLE user_settings ADD COLUMN {column} {ddl}")
+        thread_columns = {row["name"] for row in conn.execute("PRAGMA table_info(threads)")}
+        if "initiative_id" not in thread_columns:
+            conn.execute("ALTER TABLE threads ADD COLUMN initiative_id TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
@@ -169,13 +186,16 @@ class AppDB:
 
     # -- threads -------------------------------------------------------------
 
-    def create_thread(self, user_id: str, title: str) -> sqlite3.Row:
+    def create_thread(
+        self, user_id: str, title: str, initiative_id: str | None = None
+    ) -> sqlite3.Row:
         thread_id = uuid.uuid4().hex
         now = time.time()
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO threads VALUES (?, ?, ?, ?, ?)",
-                (thread_id, user_id, title, now, now),
+                "INSERT INTO threads (id, user_id, title, initiative_id, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (thread_id, user_id, title, initiative_id, now, now),
             )
             return conn.execute("SELECT * FROM threads WHERE id = ?", (thread_id,)).fetchone()
 
@@ -210,3 +230,101 @@ class AppDB:
                 "DELETE FROM threads WHERE id = ? AND user_id = ?", (thread_id, user_id)
             )
             return cur.rowcount > 0
+
+    def set_thread_initiative(
+        self, thread_id: str, user_id: str, initiative_id: str | None
+    ) -> bool:
+        """Move a thread into an initiative (or out of one when `initiative_id` is
+        None). Ownership-scoped; returns False if the thread isn't the user's."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE threads SET initiative_id = ? WHERE id = ? AND user_id = ?",
+                (initiative_id, thread_id, user_id),
+            )
+            return cur.rowcount > 0
+
+    # -- initiatives ---------------------------------------------------------
+
+    def create_initiative(self, user_id: str, name: str, goal: str = "") -> sqlite3.Row:
+        initiative_id = uuid.uuid4().hex
+        now = time.time()
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO initiatives (id, user_id, name, goal, status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, 'active', ?, ?)",
+                (initiative_id, user_id, name, goal, now, now),
+            )
+            return conn.execute(
+                "SELECT * FROM initiatives WHERE id = ?", (initiative_id,)
+            ).fetchone()
+
+    def list_initiatives(self, user_id: str) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM initiatives WHERE user_id = ? ORDER BY updated_at DESC", (user_id,)
+            ).fetchall()
+
+    def get_initiative(self, initiative_id: str, user_id: str) -> sqlite3.Row | None:
+        """Fetch an initiative only if it belongs to `user_id` (ownership check)."""
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM initiatives WHERE id = ? AND user_id = ?", (initiative_id, user_id)
+            ).fetchone()
+
+    def update_initiative(
+        self,
+        initiative_id: str,
+        user_id: str,
+        name: str | None = None,
+        goal: str | None = None,
+        status: str | None = None,
+    ) -> sqlite3.Row | None:
+        """Update the provided fields (leaving others untouched) and return the row,
+        or None if the initiative isn't the user's."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM initiatives WHERE id = ? AND user_id = ?", (initiative_id, user_id)
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute(
+                "UPDATE initiatives SET name = ?, goal = ?, status = ?, updated_at = ? "
+                "WHERE id = ? AND user_id = ?",
+                (
+                    name if name is not None else row["name"],
+                    goal if goal is not None else row["goal"],
+                    status if status is not None else row["status"],
+                    time.time(),
+                    initiative_id,
+                    user_id,
+                ),
+            )
+            return conn.execute(
+                "SELECT * FROM initiatives WHERE id = ?", (initiative_id,)
+            ).fetchone()
+
+    def delete_initiative(self, initiative_id: str, user_id: str) -> bool:
+        """Delete an initiative; its threads survive and become unfiled."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM initiatives WHERE id = ? AND user_id = ?",
+                (initiative_id, user_id),
+            ).fetchone()
+            if row is None:
+                return False
+            conn.execute(
+                "UPDATE threads SET initiative_id = NULL WHERE initiative_id = ? AND user_id = ?",
+                (initiative_id, user_id),
+            )
+            conn.execute("DELETE FROM initiatives WHERE id = ?", (initiative_id,))
+            return True
+
+    def count_threads_by_initiative(self, user_id: str) -> dict[str, int]:
+        """Map initiative_id -> number of threads, for overview counts."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT initiative_id, COUNT(*) AS n FROM threads "
+                "WHERE user_id = ? AND initiative_id IS NOT NULL GROUP BY initiative_id",
+                (user_id,),
+            ).fetchall()
+        return {row["initiative_id"]: row["n"] for row in rows}
