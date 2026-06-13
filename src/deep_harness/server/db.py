@@ -38,9 +38,20 @@ CREATE TABLE IF NOT EXISTS user_settings (
     gpu_type TEXT NOT NULL DEFAULT 'A10G',
     modal_token_id TEXT NOT NULL DEFAULT '',
     modal_token_secret TEXT NOT NULL DEFAULT '',
+    gate_plan INTEGER NOT NULL DEFAULT 1,
+    gate_training_jobs INTEGER NOT NULL DEFAULT 1,
+    gate_shell INTEGER NOT NULL DEFAULT 0,
     updated_at REAL NOT NULL
 );
 """
+
+# Columns added to user_settings after its first release; backfilled on existing
+# databases via ALTER TABLE (sqlite has no ADD COLUMN IF NOT EXISTS).
+_USER_SETTINGS_MIGRATIONS = {
+    "gate_plan": "INTEGER NOT NULL DEFAULT 1",
+    "gate_training_jobs": "INTEGER NOT NULL DEFAULT 1",
+    "gate_shell": "INTEGER NOT NULL DEFAULT 0",
+}
 
 
 class AppDB:
@@ -49,6 +60,13 @@ class AppDB:
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            self._migrate(conn)
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        existing = {row["name"] for row in conn.execute("PRAGMA table_info(user_settings)")}
+        for column, ddl in _USER_SETTINGS_MIGRATIONS.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE user_settings ADD COLUMN {column} {ddl}")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
@@ -106,6 +124,9 @@ class AppDB:
         gpu_type: str,
         modal_token_id: str | None,
         modal_token_secret: str | None,
+        gate_plan: bool,
+        gate_training_jobs: bool,
+        gate_shell: bool,
     ) -> None:
         """Update settings; ``None`` for a token field keeps the stored value
         (so clients never have to echo secrets back)."""
@@ -120,14 +141,30 @@ class AppDB:
                 existing["modal_token_secret"] if existing else ""
             )
             conn.execute(
-                """INSERT INTO user_settings VALUES (?, ?, ?, ?, ?, ?)
+                """INSERT INTO user_settings
+                     (user_id, compute_backend, gpu_type, modal_token_id, modal_token_secret,
+                      gate_plan, gate_training_jobs, gate_shell, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(user_id) DO UPDATE SET
                      compute_backend = excluded.compute_backend,
                      gpu_type = excluded.gpu_type,
                      modal_token_id = excluded.modal_token_id,
                      modal_token_secret = excluded.modal_token_secret,
+                     gate_plan = excluded.gate_plan,
+                     gate_training_jobs = excluded.gate_training_jobs,
+                     gate_shell = excluded.gate_shell,
                      updated_at = excluded.updated_at""",
-                (user_id, compute_backend, gpu_type, token_id, token_secret, time.time()),
+                (
+                    user_id,
+                    compute_backend,
+                    gpu_type,
+                    token_id,
+                    token_secret,
+                    int(gate_plan),
+                    int(gate_training_jobs),
+                    int(gate_shell),
+                    time.time(),
+                ),
             )
 
     # -- threads -------------------------------------------------------------
