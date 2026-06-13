@@ -22,13 +22,43 @@ class UserInfo(BaseModel):
 
 class ThreadCreate(BaseModel):
     title: str = Field(default="New conversation", max_length=200)
+    initiative_id: str | None = None
 
 
 class ThreadInfo(BaseModel):
     id: str
     title: str
+    initiative_id: str | None = None
     created_at: float
     updated_at: float
+
+
+class ThreadUpdate(BaseModel):
+    """Move a thread into an initiative, or out of one (initiative_id = null)."""
+
+    initiative_id: str | None = None
+
+
+class InitiativeCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    goal: str = Field(default="", max_length=2000)
+
+
+class InitiativeUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    goal: str | None = Field(default=None, max_length=2000)
+    status: str | None = Field(default=None, pattern="^(active|completed|archived)$")
+
+
+class InitiativeInfo(BaseModel):
+    id: str
+    name: str
+    goal: str
+    status: str
+    created_at: float
+    updated_at: float
+    thread_count: int = 0
+    experiment_count: int = 0
 
 
 class MessageRequest(BaseModel):

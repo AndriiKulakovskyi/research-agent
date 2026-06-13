@@ -16,10 +16,14 @@ from deep_harness.server.schemas import (
     ComputeSettingsUpdate,
     Credentials,
     FileEntry,
+    InitiativeCreate,
+    InitiativeInfo,
+    InitiativeUpdate,
     MessageOut,
     MessageRequest,
     ThreadCreate,
     ThreadInfo,
+    ThreadUpdate,
     TodoItem,
     TokenResponse,
     UserInfo,
@@ -31,6 +35,7 @@ threads_router = APIRouter(prefix="/api/threads", tags=["threads"])
 files_router = APIRouter(prefix="/api/files", tags=["files"])
 settings_router = APIRouter(prefix="/api/settings", tags=["settings"])
 experiments_router = APIRouter(prefix="/api/experiments", tags=["experiments"])
+initiatives_router = APIRouter(prefix="/api/initiatives", tags=["initiatives"])
 
 IMAGE_MEDIA_TYPES = {"image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp"}
 
@@ -39,8 +44,16 @@ MAX_IMAGE_BYTES = 8_000_000
 RECURSION_LIMIT = 250
 
 
-def _thread_config(thread_id: str) -> dict:
-    return {"configurable": {"thread_id": thread_id}, "recursion_limit": RECURSION_LIMIT}
+def _thread_config(
+    thread_id: str,
+    initiative_id: str | None = None,
+    initiative_name: str | None = None,
+) -> dict:
+    configurable = {"thread_id": thread_id}
+    if initiative_id is not None:
+        configurable["initiative_id"] = initiative_id
+        configurable["initiative_name"] = initiative_name
+    return {"configurable": configurable, "recursion_limit": RECURSION_LIMIT}
 
 
 # -- auth ----------------------------------------------------------------------
@@ -86,17 +99,43 @@ def _require_thread(request: Request, thread_id: str, user: CurrentUser):
     return row
 
 
+_THREAD_FIELDS = ("id", "title", "initiative_id", "created_at", "updated_at")
+
+
 @threads_router.get("", response_model=list[ThreadInfo])
 def list_threads(request: Request, user: CurrentUser = Depends(get_current_user)):
-    return [ThreadInfo(**dict(row)) for row in request.app.state.db.list_threads(user.id)]
+    return [
+        ThreadInfo(**{k: row[k] for k in _THREAD_FIELDS})
+        for row in request.app.state.db.list_threads(user.id)
+    ]
 
 
 @threads_router.post("", response_model=ThreadInfo, status_code=201)
 def create_thread(
     body: ThreadCreate, request: Request, user: CurrentUser = Depends(get_current_user)
 ):
-    row = request.app.state.db.create_thread(user.id, body.title)
-    return ThreadInfo(**{k: row[k] for k in ("id", "title", "created_at", "updated_at")})
+    db = request.app.state.db
+    if body.initiative_id is not None and db.get_initiative(body.initiative_id, user.id) is None:
+        raise HTTPException(404, "initiative not found")
+    row = db.create_thread(user.id, body.title, body.initiative_id)
+    return ThreadInfo(**{k: row[k] for k in _THREAD_FIELDS})
+
+
+@threads_router.patch("/{thread_id}", response_model=ThreadInfo)
+def update_thread(
+    thread_id: str,
+    body: ThreadUpdate,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Move a thread into an initiative, or out of one (initiative_id = null)."""
+    db = request.app.state.db
+    _require_thread(request, thread_id, user)
+    if body.initiative_id is not None and db.get_initiative(body.initiative_id, user.id) is None:
+        raise HTTPException(404, "initiative not found")
+    db.set_thread_initiative(thread_id, user.id, body.initiative_id)
+    row = db.get_thread(thread_id, user.id)
+    return ThreadInfo(**{k: row[k] for k in _THREAD_FIELDS})
 
 
 @threads_router.delete("/{thread_id}", status_code=204)
@@ -146,10 +185,20 @@ async def post_message(
     title = body.content[:60] if row["title"] == "New conversation" else None
     db.touch_thread(thread_id, title)
 
+    # The thread's initiative rides along in the run config so experiments logged
+    # during this run (by the agent or its subagents) auto-file under it.
+    initiative_id = row["initiative_id"]
+    initiative_name = None
+    if initiative_id is not None:
+        initiative = db.get_initiative(initiative_id, user.id)
+        initiative_name = initiative["name"] if initiative is not None else None
+
     agent = request.app.state.agents.get_agent(user.id)
     state = {"messages": [{"role": "user", "content": body.content}]}
     return StreamingResponse(
-        stream_agent_events(agent, state, _thread_config(thread_id)),
+        stream_agent_events(
+            agent, state, _thread_config(thread_id, initiative_id, initiative_name)
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -236,8 +285,75 @@ def read_file(file_path: str, request: Request, user: CurrentUser = Depends(get_
 
 
 @experiments_router.get("")
-def list_experiments_route(request: Request, user: CurrentUser = Depends(get_current_user)):
-    """The user's experiment registry (newest first) for the UI Experiments tab."""
+def list_experiments_route(
+    request: Request,
+    initiative_id: str | None = None,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """The user's experiment registry (newest first) for the UI Experiments tab.
+    Pass `initiative_id` to scope to one research initiative."""
     workspace = request.app.state.agents.user_workspace(user.id)
-    records = read_registry(workspace)
+    records = read_registry(workspace, initiative_id=initiative_id)
     return sorted(records, key=lambda r: r.get("timestamp", 0), reverse=True)
+
+
+# -- initiatives -------------------------------------------------------------
+
+
+def _initiative_info(db, workspace, row, thread_counts: dict[str, int]) -> InitiativeInfo:
+    experiment_count = len(read_registry(workspace, initiative_id=row["id"]))
+    return InitiativeInfo(
+        id=row["id"],
+        name=row["name"],
+        goal=row["goal"],
+        status=row["status"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        thread_count=thread_counts.get(row["id"], 0),
+        experiment_count=experiment_count,
+    )
+
+
+@initiatives_router.get("", response_model=list[InitiativeInfo])
+def list_initiatives(request: Request, user: CurrentUser = Depends(get_current_user)):
+    db = request.app.state.db
+    workspace = request.app.state.agents.user_workspace(user.id)
+    thread_counts = db.count_threads_by_initiative(user.id)
+    return [
+        _initiative_info(db, workspace, row, thread_counts)
+        for row in db.list_initiatives(user.id)
+    ]
+
+
+@initiatives_router.post("", response_model=InitiativeInfo, status_code=201)
+def create_initiative(
+    body: InitiativeCreate, request: Request, user: CurrentUser = Depends(get_current_user)
+):
+    db = request.app.state.db
+    workspace = request.app.state.agents.user_workspace(user.id)
+    row = db.create_initiative(user.id, body.name, body.goal)
+    return _initiative_info(db, workspace, row, {})
+
+
+@initiatives_router.patch("/{initiative_id}", response_model=InitiativeInfo)
+def update_initiative(
+    initiative_id: str,
+    body: InitiativeUpdate,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+):
+    db = request.app.state.db
+    workspace = request.app.state.agents.user_workspace(user.id)
+    row = db.update_initiative(initiative_id, user.id, body.name, body.goal, body.status)
+    if row is None:
+        raise HTTPException(404, "initiative not found")
+    thread_counts = db.count_threads_by_initiative(user.id)
+    return _initiative_info(db, workspace, row, thread_counts)
+
+
+@initiatives_router.delete("/{initiative_id}", status_code=204)
+def delete_initiative(
+    initiative_id: str, request: Request, user: CurrentUser = Depends(get_current_user)
+):
+    if not request.app.state.db.delete_initiative(initiative_id, user.id):
+        raise HTTPException(404, "initiative not found")

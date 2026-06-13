@@ -455,3 +455,208 @@ textarea:focus {
   font-size: 12.5px;
   line-height: 1.5;
 }
+
+/* ---- initiatives (sidebar) ---- */
+.initiatives-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+.initiative-input {
+  width: 130px;
+  padding: 3px 6px;
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.initiative-group {
+  border-bottom: 1px solid var(--border);
+}
+.initiative-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.initiative-header:hover {
+  background: var(--bg-hover);
+}
+.initiative-header.active {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+}
+.initiative-header.unfiled .initiative-name {
+  color: var(--text-muted);
+}
+.chevron {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  width: 12px;
+}
+.initiative-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.count {
+  font-size: 11px;
+  min-width: 14px;
+  text-align: right;
+}
+.status-pill {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+.status-active {
+  background: rgba(123, 216, 143, 0.14);
+  color: #7bd88f;
+}
+.status-completed {
+  background: rgba(90, 169, 230, 0.14);
+  color: #5aa9e6;
+}
+.status-archived {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+.initiative-controls,
+.thread-controls {
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+.initiative-header:hover .initiative-controls,
+.thread-item:hover .thread-controls {
+  display: inline-flex;
+}
+.status-select,
+.move-select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 1px 3px;
+  max-width: 92px;
+}
+.initiative-threads .thread-item {
+  padding-left: 28px;
+}
+.small-pad {
+  padding-left: 28px;
+  font-size: 12px;
+}
+
+/* ---- initiative overview (side panel) ---- */
+.initiative-overview {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+.initiative-overview-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.initiative-overview-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.initiative-goal {
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+.initiative-counts {
+  font-size: 11.5px;
+  margin-top: 6px;
+}
+
+/* ---- experiment comparison ---- */
+.compare-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.experiment-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.compare-view {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.compare-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.compare-chart-title {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--mono);
+  margin-bottom: 4px;
+  color: var(--text-muted);
+}
+.params-diff table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-family: var(--mono);
+}
+.params-diff th,
+.params-diff td {
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+}
+.params-diff th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.params-diff tr.differs td {
+  color: var(--accent);
+}
