@@ -46,6 +46,22 @@ class AgentManager:
             modal_token_secret=row["modal_token_secret"],
         )
 
+    def interrupt_on(self, user_id: str) -> dict[str, bool]:
+        """Which tools to gate for human approval, from the user's settings.
+        Fixed at agent-build time, so a gate change must `invalidate` the agent."""
+        row = self._db.get_user_settings(user_id)
+        gate_plan = bool(row["gate_plan"]) if row is not None else True
+        gate_training = bool(row["gate_training_jobs"]) if row is not None else True
+        gate_shell = bool(row["gate_shell"]) if row is not None else False
+        gates: dict[str, bool] = {}
+        if gate_plan:
+            gates["submit_plan"] = True
+        if gate_training:
+            gates["run_training_job"] = True
+        if gate_shell:
+            gates["execute"] = True
+        return gates
+
     def user_workspace(self, user_id: str) -> Path:
         root = get_settings().workspace_dir / "users" / user_id
         sync_workspace_assets(root)
@@ -59,6 +75,12 @@ class AgentManager:
                 workspace_dir=self.user_workspace(user_id),
                 checkpointer=self._checkpointer,
                 compute_config_provider=lambda: self.compute_config(user_id),
+                interrupt_on=self.interrupt_on(user_id),
             )
             self._agents[user_id] = agent
         return agent
+
+    def invalidate(self, user_id: str) -> None:
+        """Drop the cached agent so the next request rebuilds it — used when the
+        user changes which tools are gated."""
+        self._agents.pop(user_id, None)

@@ -59,6 +59,9 @@ class ComputeSettings(BaseModel):
     gpu_type: str = "A10G"
     modal_token_id: str = ""
     modal_token_secret_set: bool = False
+    gate_plan: bool = True
+    gate_training_jobs: bool = True
+    gate_shell: bool = False
 
 
 class ComputeSettingsUpdate(BaseModel):
@@ -68,3 +71,14 @@ class ComputeSettingsUpdate(BaseModel):
     gpu_type: str = Field(default="A10G", pattern="^(T4|L4|A10G|A100|H100)$")
     modal_token_id: str | None = None
     modal_token_secret: str | None = None
+    gate_plan: bool = True
+    gate_training_jobs: bool = True
+    gate_shell: bool = False
+
+
+class ResumeRequest(BaseModel):
+    """Resume a paused (gated) run. `message` carries plan-change feedback for a
+    `respond`/`reject` decision, injected to the agent so it can revise."""
+
+    decision: str = Field(pattern="^(approve|reject|respond)$")
+    message: str | None = Field(default=None, max_length=10_000)

@@ -20,6 +20,7 @@ The harness combines the deepagents built-ins with domain tools and specialist s
 | **Deep research** | `research-analyst` subagent runs literature reviews before methodology design: keyless arXiv + Semantic Scholar search, optional Tavily web search, `fetch_url`, and the `think_tool` reflection loop; citation-backed reviews saved under `research/` |
 | **Async research** | Optional Agent Protocol server (`deep-harness-research-server`) hosts the researcher as a background subagent — the main agent starts a review with `start_async_task`, keeps working (e.g. preparing data), and collects the report with `check_async_task` |
 | **Experiment tracking** | `log_experiment` / `list_experiments` keep every training/evaluation run (metrics, params, artifacts) in a per-user registry, surfaced in the UI **Experiments** tab; figures render directly in the file viewer |
+| **Approval gates** | Per-user, configurable in ⚙ Settings: the agent pauses for human sign-off before committing to the research plan (`submit_plan`, with a review/revise loop), before running training jobs, and optionally before shell commands |
 | **Self-improving memory** | A per-workspace `memory/AGENTS.md` loaded into the system prompt at startup; the agent records durable lessons there as it works |
 | **Delegation** | Subagents via `task`: `data-scientist`, `ml-engineer`, `data-engineer`, `software-engineer`, `knowledge-engineer` |
 

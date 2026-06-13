@@ -8,6 +8,7 @@ import {
   getUsername,
   listThreads,
   logout,
+  resumeMessage,
   streamMessage,
 } from "./api";
 import { Chat } from "./components/Chat";
@@ -15,7 +16,7 @@ import { Login } from "./components/Login";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
 import { SidePanel } from "./components/SidePanel";
-import type { ChatItem, ThreadInfo, TodoItem } from "./types";
+import type { ActionRequest, ChatItem, Decision, StreamEvent, ThreadInfo, TodoItem } from "./types";
 
 export default function App() {
   const [authed, setAuthed] = useState(() => getToken() !== null);
@@ -27,6 +28,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState<ActionRequest | null>(null);
   const streamBuffer = useRef("");
 
   const refreshThreads = useCallback(async () => {
@@ -78,6 +80,70 @@ export default function App() {
     await refreshThreads();
   }
 
+  const handleEvent = useCallback((event: StreamEvent) => {
+    switch (event.type) {
+      case "token":
+        if (event.source === "agent") {
+          streamBuffer.current += event.text;
+          setStreamingText(streamBuffer.current);
+        }
+        break;
+      case "tool_call":
+        setItems((prev) => [
+          ...prev,
+          {
+            kind: "activity",
+            label: `→ ${event.name}`,
+            detail: JSON.stringify(event.args).slice(0, 120),
+            source: event.source,
+          },
+        ]);
+        break;
+      case "tool_result":
+        setItems((prev) => [
+          ...prev,
+          {
+            kind: "activity",
+            label: `✓ ${event.name}`,
+            detail: event.preview.slice(0, 120),
+            source: event.source,
+          },
+        ]);
+        break;
+      case "todos":
+        setTodos(event.items);
+        break;
+      case "message":
+        streamBuffer.current = "";
+        setStreamingText("");
+        if (event.source === "agent") {
+          setItems((prev) => [
+            ...prev,
+            { kind: "assistant", content: event.content, source: event.source },
+          ]);
+        }
+        break;
+      case "approval_required":
+        // The run paused on a gate; surface the first request for the user.
+        setPendingApproval(event.requests[0] ?? null);
+        break;
+      case "error":
+        setItems((prev) => [
+          ...prev,
+          { kind: "activity", label: "⚠ error", detail: event.detail, source: "agent" },
+        ]);
+        break;
+    }
+  }, []);
+
+  const finishStream = useCallback(() => {
+    setBusy(false);
+    setStreamingText("");
+    streamBuffer.current = "";
+    setRefreshKey((k) => k + 1);
+    refreshThreads().catch(() => undefined);
+  }, [refreshThreads]);
+
   async function send(content: string) {
     let threadId = activeId;
     if (!threadId) {
@@ -89,63 +155,31 @@ export default function App() {
     setBusy(true);
     streamBuffer.current = "";
     try {
-      await streamMessage(threadId, content, (event) => {
-        switch (event.type) {
-          case "token":
-            if (event.source === "agent") {
-              streamBuffer.current += event.text;
-              setStreamingText(streamBuffer.current);
-            }
-            break;
-          case "tool_call":
-            setItems((prev) => [
-              ...prev,
-              {
-                kind: "activity",
-                label: `→ ${event.name}`,
-                detail: JSON.stringify(event.args).slice(0, 120),
-                source: event.source,
-              },
-            ]);
-            break;
-          case "tool_result":
-            setItems((prev) => [
-              ...prev,
-              {
-                kind: "activity",
-                label: `✓ ${event.name}`,
-                detail: event.preview.slice(0, 120),
-                source: event.source,
-              },
-            ]);
-            break;
-          case "todos":
-            setTodos(event.items);
-            break;
-          case "message":
-            streamBuffer.current = "";
-            setStreamingText("");
-            if (event.source === "agent") {
-              setItems((prev) => [
-                ...prev,
-                { kind: "assistant", content: event.content, source: event.source },
-              ]);
-            }
-            break;
-          case "error":
-            setItems((prev) => [
-              ...prev,
-              { kind: "activity", label: "⚠ error", detail: event.detail, source: "agent" },
-            ]);
-            break;
-        }
-      });
+      await streamMessage(threadId, content, handleEvent);
     } finally {
-      setBusy(false);
-      setStreamingText("");
-      streamBuffer.current = "";
-      setRefreshKey((k) => k + 1);
-      refreshThreads().catch(() => undefined);
+      finishStream();
+    }
+  }
+
+  async function decide(decision: Decision, message: string | null) {
+    if (!activeId) return;
+    const request = pendingApproval;
+    setPendingApproval(null);
+    setItems((prev) => [
+      ...prev,
+      {
+        kind: "activity",
+        label: decision === "approve" ? "✓ approved" : decision === "reject" ? "✕ rejected" : "✎ changes requested",
+        detail: message ?? request?.name ?? "",
+        source: "agent",
+      },
+    ]);
+    setBusy(true);
+    streamBuffer.current = "";
+    try {
+      await resumeMessage(activeId, decision, message, handleEvent);
+    } finally {
+      finishStream();
     }
   }
 
@@ -165,7 +199,14 @@ export default function App() {
         }}
         onSettings={() => setShowSettings(true)}
       />
-      <Chat items={items} streamingText={streamingText} busy={busy} onSend={send} />
+      <Chat
+        items={items}
+        streamingText={streamingText}
+        busy={busy}
+        onSend={send}
+        pendingApproval={pendingApproval}
+        onDecide={decide}
+      />
       <SidePanel todos={todos} refreshKey={refreshKey} />
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
     </div>

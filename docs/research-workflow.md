@@ -11,7 +11,7 @@ each stage. This is the lifecycle the agent itself is instructed to follow
 | 1. Idea | Describes a hypothesis or question in chat | Threads (persistent, per user) |
 | 2. Survey | Reviews academic & industrial state of the art | `research-analyst` subagent: arXiv + Semantic Scholar (keyless), optional Tavily, `fetch_url`, `think_tool` reflection. Async mode (`RESEARCH_SERVER_URL`) runs reviews in the background while step 3 proceeds |
 | 3. Ground in data | Checks feasibility against real data and compute | `describe_table` + data dictionary (`describe_variable`), `run_sql` profiling, `gpu_info` |
-| 4. Plan | Fixes hypothesis, methodology, experiments, success criteria | Durable `research/PLAN.md` in the workspace (updated as work evolves) + `write_todos` for in-flight steps |
+| 4. Plan | Fixes hypothesis, methodology, experiments, success criteria | Durable `research/PLAN.md` in the workspace + `write_todos` for in-flight steps. The agent then calls `submit_plan` for **human sign-off** (see Safety & review) before any experiments run |
 | 5. Experiment | Implements and runs code | Workspace + `execute` for iteration; `run_training_job` for heavy runs on the user's configured compute (local GPU or Modal sandbox); skills (`pytorch-training`, `gpu-data-science`) guide the code |
 | 6. Track | Keeps runs comparable | `log_experiment` / `list_experiments` → per-user registry (`experiments/registry.jsonl`), surfaced in the UI **Experiments** tab with metrics and artifact links |
 | 7. Analyze | Inspects metrics and figures | Figures render directly in the UI file viewer (binary/image serving); readout compares results against the plan's success criteria |
@@ -23,6 +23,21 @@ the knowledge graph accumulates papers ↔ approaches ↔ datasets, the memory
 file carries hard-won conventions, and the experiment registry prevents
 re-running dead ends.
 
+## Safety & review (human-in-the-loop)
+
+Each user controls, in ⚙ Settings, where the agent must pause for approval
+(deepagents `interrupt_on` + LangGraph interrupts; the paused run persists in
+the checkpointer, so approval is a separate request):
+
+- **Plan review** (default on) — after writing `research/PLAN.md` the agent
+  calls `submit_plan`; the run pauses and the UI shows a Plan-review card with
+  the summary and the plan text. The reviewer **Approves** (the agent proceeds)
+  or **requests changes** with free-text feedback, which is injected back so the
+  agent revises `PLAN.md` and re-submits — a real review/revise loop.
+- **Training-job approval** (default on) — `run_training_job` can spend money on
+  Modal, so it pauses for an Approve/Reject card showing the script + args.
+- **Shell approval** (default off) — optionally gate every `execute` call.
+
 ## Roadmap (identified, not yet built)
 
 - **Research initiatives as first-class objects** — group threads, plan,
@@ -31,8 +46,6 @@ re-running dead ends.
 - **Experiment comparison view** — side-by-side metric charts in the UI;
   today the Experiments tab lists runs and the agent compares via
   `list_experiments`.
-- **Human-in-the-loop approvals** — deepagents `interrupt_on` for gating
-  `execute`/`run_training_job` behind a UI confirmation.
 - **Shared team knowledge** — the dictionary/KG are already shared; per-team
   scoping and review queues for proposed semantic changes are not.
 - **Citation export** — BibTeX generation from the KG's paper nodes.

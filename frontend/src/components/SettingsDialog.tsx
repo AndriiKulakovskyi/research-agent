@@ -29,6 +29,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         // only send token fields the user actually edited; null keeps stored values
         modal_token_id: tokenId !== settings.modal_token_id ? tokenId : null,
         modal_token_secret: tokenSecret ? tokenSecret : null,
+        gate_plan: settings.gate_plan,
+        gate_training_jobs: settings.gate_training_jobs,
+        gate_shell: settings.gate_shell,
       });
       setSettings(updated);
       setTokenSecret("");
@@ -110,6 +113,33 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             </p>
           </>
         )}
+
+        <h2 className="section-heading">Approval gates</h2>
+        <p className="muted">Pause for your approval before the agent takes these actions.</p>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={settings.gate_plan}
+            onChange={(e) => setSettings({ ...settings, gate_plan: e.target.checked })}
+          />
+          Review the research plan before experiments
+        </label>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={settings.gate_training_jobs}
+            onChange={(e) => setSettings({ ...settings, gate_training_jobs: e.target.checked })}
+          />
+          Approve training jobs before they run (they can cost money)
+        </label>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={settings.gate_shell}
+            onChange={(e) => setSettings({ ...settings, gate_shell: e.target.checked })}
+          />
+          Approve shell commands before they run
+        </label>
 
         <div className="dialog-actions">
           <span className="muted">{status}</span>

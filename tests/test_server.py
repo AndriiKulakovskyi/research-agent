@@ -4,9 +4,10 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 
 from deep_harness.server.app import create_app
-from tests.conftest import make_fake_model
+from tests.conftest import ScriptedModel, make_fake_model, tool_call_message
 
 
 @pytest.fixture
@@ -15,6 +16,27 @@ def client(settings):
     app = create_app(model=make_fake_model())
     with TestClient(app) as c:
         yield c
+
+
+def _sse(response):
+    return [
+        json.loads(line[len("data: "):])
+        for line in response.iter_lines()
+        if line.startswith("data: ")
+    ]
+
+
+def _gated_client(settings):
+    """A client whose agent emits a gated run_training_job call, then a final
+    message after the gate resolves."""
+    model = ScriptedModel(
+        replies=[
+            tool_call_message("run_training_job", {"script_path": "train.py"}),
+            AIMessage(content="Training finished."),
+        ]
+    )
+    app = create_app(model=model)
+    return TestClient(app)
 
 
 def _auth(client, username="alice", password="password123"):
@@ -116,14 +138,30 @@ def test_workspace_files_scoped_per_user(client, settings):
 
 def test_compute_settings_roundtrip(client):
     headers = _auth(client)
-    # defaults
+    # defaults — including the approval-gate flags
     settings = client.get("/api/settings", headers=headers).json()
     assert settings == {
         "compute_backend": "local",
         "gpu_type": "A10G",
         "modal_token_id": "",
         "modal_token_secret_set": False,
+        "gate_plan": True,
+        "gate_training_jobs": True,
+        "gate_shell": False,
     }
+    # gate flags persist
+    gated = client.put(
+        "/api/settings",
+        json={
+            "compute_backend": "local",
+            "gpu_type": "A10G",
+            "gate_plan": False,
+            "gate_training_jobs": True,
+            "gate_shell": True,
+        },
+        headers=headers,
+    ).json()
+    assert gated["gate_plan"] is False and gated["gate_shell"] is True
     # switch to modal with credentials
     updated = client.put(
         "/api/settings",
@@ -203,6 +241,64 @@ def test_image_files_served_as_bytes(client, settings):
     (user_dir / "outputs" / "metrics.json").write_text('{"auc": 0.9}')
     text = client.get("/api/files/outputs%2Fmetrics.json", headers=headers)
     assert text.status_code == 200 and "0.9" in text.text
+
+
+def test_gated_tool_pauses_and_resumes_via_api(settings):
+    with _gated_client(settings) as client:
+        headers = _auth(client)
+        thread = client.post("/api/threads", json={}, headers=headers).json()
+        tid = thread["id"]
+
+        # The gated training job pauses the run → approval_required, no result yet
+        with client.stream(
+            "POST", f"/api/threads/{tid}/messages",
+            json={"content": "train the model"}, headers=headers,
+        ) as resp:
+            events = _sse(resp)
+        approvals = [e for e in events if e["type"] == "approval_required"]
+        assert approvals, events
+        assert approvals[0]["requests"][0]["name"] == "run_training_job"
+
+        # Approve → the continuation streams and the tool executes
+        with client.stream(
+            "POST", f"/api/threads/{tid}/resume",
+            json={"decision": "approve"}, headers=headers,
+        ) as resp:
+            events = _sse(resp)
+        tool_results = [e for e in events if e["type"] == "tool_result"]
+        assert any(e["name"] == "run_training_job" for e in tool_results), events
+
+
+def test_gate_off_runs_without_pause(settings):
+    with _gated_client(settings) as client:
+        headers = _auth(client)
+        # turn the training-job gate off
+        client.put(
+            "/api/settings",
+            json={"compute_backend": "local", "gpu_type": "A10G",
+                  "gate_plan": False, "gate_training_jobs": False, "gate_shell": False},
+            headers=headers,
+        )
+        thread = client.post("/api/threads", json={}, headers=headers).json()
+        with client.stream(
+            "POST", f"/api/threads/{thread['id']}/messages",
+            json={"content": "train"}, headers=headers,
+        ) as resp:
+            events = _sse(resp)
+        # no approval gate; the tool ran straight through
+        assert not [e for e in events if e["type"] == "approval_required"]
+        assert any(
+            e["type"] == "tool_result" and e["name"] == "run_training_job" for e in events
+        ), events
+
+
+def test_resume_without_pending_is_conflict(client):
+    headers = _auth(client)
+    thread = client.post("/api/threads", json={}, headers=headers).json()
+    r = client.post(
+        f"/api/threads/{thread['id']}/resume", json={"decision": "approve"}, headers=headers
+    )
+    assert r.status_code == 409
 
 
 def test_todos_endpoint_empty_thread(client):

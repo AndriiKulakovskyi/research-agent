@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatItem } from "../types";
+import type { ActionRequest, ChatItem, Decision } from "../types";
+import { ApprovalCard } from "./ApprovalCard";
 
 interface Props {
   items: ChatItem[];
   streamingText: string;
   busy: boolean;
   onSend: (content: string) => void;
+  pendingApproval: ActionRequest | null;
+  onDecide: (decision: Decision, message: string | null) => void;
 }
 
-export function Chat({ items, streamingText, busy, onSend }: Props) {
+export function Chat({ items, streamingText, busy, onSend, pendingApproval, onDecide }: Props) {
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -61,27 +64,33 @@ export function Chat({ items, streamingText, busy, onSend }: Props) {
             <pre>{streamingText}</pre>
           </div>
         )}
-        {busy && !streamingText && <div className="thinking">working…</div>}
+        {busy && !streamingText && !pendingApproval && <div className="thinking">working…</div>}
         <div ref={bottomRef} />
       </div>
-      <div className="composer">
-        <textarea
-          value={draft}
-          placeholder={busy ? "Agent is working…" : "Send a task to the agent"}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={3}
-          disabled={busy}
-        />
-        <button className="primary" onClick={submit} disabled={busy || !draft.trim()}>
-          Send
-        </button>
-      </div>
+      {pendingApproval ? (
+        <div className="composer approval">
+          <ApprovalCard request={pendingApproval} busy={busy} onDecide={onDecide} />
+        </div>
+      ) : (
+        <div className="composer">
+          <textarea
+            value={draft}
+            placeholder={busy ? "Agent is working…" : "Send a task to the agent"}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            rows={3}
+            disabled={busy}
+          />
+          <button className="primary" onClick={submit} disabled={busy || !draft.trim()}>
+            Send
+          </button>
+        </div>
+      )}
     </section>
   );
 }

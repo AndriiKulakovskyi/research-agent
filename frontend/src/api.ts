@@ -82,6 +82,9 @@ export const updateComputeSettings = (body: {
   gpu_type: string;
   modal_token_id: string | null;
   modal_token_secret: string | null;
+  gate_plan: boolean;
+  gate_training_jobs: boolean;
+  gate_shell: boolean;
 }) => request<ComputeSettings>("/api/settings", { method: "PUT", body: JSON.stringify(body) });
 
 export const listExperiments = () => request<ExperimentRecord[]>("/api/experiments");
@@ -103,16 +106,15 @@ export async function readFile(path: string): Promise<FileContent> {
   return { kind: "text", text: await response.text() };
 }
 
-/** POST a message and invoke `onEvent` for every SSE event until `done`. */
-export async function streamMessage(
-  threadId: string,
-  content: string,
+async function consumeSSE(
+  path: string,
+  body: unknown,
   onEvent: (event: StreamEvent) => void,
 ): Promise<void> {
-  const response = await fetch(`/api/threads/${threadId}/messages`, {
+  const response = await fetch(path, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(body),
   });
   if (!response.ok || !response.body) {
     throw new Error(`stream failed: HTTP ${response.status}`);
@@ -134,3 +136,19 @@ export async function streamMessage(
     }
   }
 }
+
+/** POST a message and invoke `onEvent` for every SSE event until `done`. */
+export const streamMessage = (
+  threadId: string,
+  content: string,
+  onEvent: (event: StreamEvent) => void,
+) => consumeSSE(`/api/threads/${threadId}/messages`, { content }, onEvent);
+
+/** Resolve an approval gate and stream the continuation. `message` carries
+ * plan-change feedback for a `respond` decision. */
+export const resumeMessage = (
+  threadId: string,
+  decision: "approve" | "reject" | "respond",
+  message: string | null,
+  onEvent: (event: StreamEvent) => void,
+) => consumeSSE(`/api/threads/${threadId}/resume`, { decision, message }, onEvent);
