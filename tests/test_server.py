@@ -147,7 +147,7 @@ def test_compute_settings_roundtrip(client):
         "modal_token_secret_set": False,
         "gate_plan": True,
         "gate_training_jobs": True,
-        "gate_shell": False,
+        "gate_shell": True,  # shell runs unsandboxed, so it's gated by default
     }
     # gate flags persist
     gated = client.put(

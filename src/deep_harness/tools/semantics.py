@@ -18,6 +18,7 @@ or any dotted/plain name for dataset variables) to a semantic record:
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,11 @@ from langchain_core.tools import tool
 from deep_harness.config import get_settings
 
 _RECORD_FIELDS = ("description", "type", "unit", "synonyms", "tags", "notes")
+
+# The dictionary file is a process-global shared by every user's agent. Serialize
+# read-modify-write so concurrent define_variable calls can't lose updates or
+# write a torn JSON file.
+_write_lock = threading.Lock()
 
 
 def _dictionary_path() -> Path:
@@ -42,7 +48,12 @@ def load_dictionary() -> dict[str, dict[str, Any]]:
 def save_dictionary(data: dict[str, dict[str, Any]]) -> None:
     path = _dictionary_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    # Write to a temp file and atomically rename, so a concurrent reader (the
+    # write lock guards writers against each other, but readers are unlocked)
+    # always sees a complete file — the old one or the new one, never a torn write.
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    tmp.replace(path)
 
 
 def _format_record(name: str, record: dict[str, Any]) -> str:
@@ -109,22 +120,23 @@ def define_variable(
     Use "table.column" keys for database columns. Updating merges over the
     existing record; pass an empty value to leave a field unchanged.
     """
-    data = load_dictionary()
-    record = data.get(name, {})
-    updates = {
-        "description": description,
-        "type": type,
-        "unit": unit,
-        "synonyms": synonyms,
-        "tags": tags,
-        "notes": notes,
-    }
-    for key, value in updates.items():
-        if value:
-            record[key] = value
-    data[name] = record
-    save_dictionary(data)
-    return f"Saved dictionary entry:\n{_format_record(name, record)}"
+    with _write_lock:
+        data = load_dictionary()
+        record = data.get(name, {})
+        updates = {
+            "description": description,
+            "type": type,
+            "unit": unit,
+            "synonyms": synonyms,
+            "tags": tags,
+            "notes": notes,
+        }
+        for key, value in updates.items():
+            if value:
+                record[key] = value
+        data[name] = record
+        save_dictionary(data)
+        return f"Saved dictionary entry:\n{_format_record(name, record)}"
 
 
 SEMANTICS_TOOLS = [search_variables, describe_variable, define_variable]

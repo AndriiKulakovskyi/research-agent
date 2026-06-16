@@ -23,10 +23,62 @@ def test_database_tools(settings):
 
 def test_run_sql_rejects_writes(settings):
     _seed_db(settings)
-    for bad in ("DELETE FROM orders", "DROP TABLE orders", "SELECT 1; DELETE FROM orders"):
-        assert "Rejected" in run_sql.invoke({"query": bad})
+    bad_queries = (
+        "DELETE FROM orders",
+        "DROP TABLE orders",
+        "SELECT 1; DELETE FROM orders",
+        # data-modifying CTE: starts with WITH but mutates (Postgres/MySQL)
+        "WITH x AS (DELETE FROM orders RETURNING *) SELECT * FROM x",
+        # EXPLAIN of a write executes the write on some backends
+        "EXPLAIN DELETE FROM orders",
+        "EXPLAIN ANALYZE INSERT INTO orders VALUES (3, 1.0)",
+        # SELECT ... INTO creates a table
+        "SELECT * INTO backup FROM orders",
+        # write keyword hidden after a leading allowed prefix
+        "WITH t AS (SELECT 1) UPDATE orders SET total_amount = 0",
+    )
+    for bad in bad_queries:
+        assert "Rejected" in run_sql.invoke({"query": bad}), f"should reject: {bad}"
     # data unchanged
     assert "2" in run_sql.invoke({"query": "SELECT COUNT(*) FROM orders"})
+
+
+def test_run_sql_rejects_side_effecting_functions(settings):
+    """Functions callable from a plain SELECT that read/write files, run commands,
+    advance sequences, or stall the server must be rejected even though no
+    write/DDL keyword is present."""
+    _seed_db(settings)
+    for bad in (
+        "SELECT writefile('/tmp/pwn', 'OWNED') AS n",  # SQLite filesystem write
+        "SELECT readfile('/etc/passwd')",  # SQLite file read
+        "SELECT load_extension('evil')",
+        "SELECT nextval('s')",  # Postgres sequence mutation (non-transactional)
+        "SELECT pg_read_file('/etc/passwd')",
+        "SELECT pg_terminate_backend(123)",
+        "SELECT sys_exec('id')",  # MySQL UDF command execution
+        "SELECT load_file('/etc/passwd')",
+        "SELECT sleep(10)",
+        "SELECT dblink_exec('c', 'delete from t')",
+    ):
+        assert "Rejected" in run_sql.invoke({"query": bad}), f"should reject: {bad}"
+
+
+def test_run_sql_allows_legitimate_reads(settings):
+    _seed_db(settings)
+    # a write keyword inside a string literal must not trip the guard
+    assert "Rejected" not in run_sql.invoke(
+        {"query": "SELECT 'delete me' AS label, COUNT(*) AS n FROM orders"}
+    )
+    # benign read-only CTE
+    assert "Rejected" not in run_sql.invoke(
+        {"query": "WITH t AS (SELECT total_amount FROM orders) SELECT COUNT(*) FROM t"}
+    )
+    # EXPLAIN of a read
+    assert "Rejected" not in run_sql.invoke({"query": "EXPLAIN SELECT * FROM orders"})
+    # replace() is a read-only string function, not a write — must be allowed
+    assert "Rejected" not in run_sql.invoke(
+        {"query": "SELECT replace(CAST(order_id AS TEXT), '1', 'x') FROM orders"}
+    )
 
 
 def test_semantics_roundtrip(settings):
