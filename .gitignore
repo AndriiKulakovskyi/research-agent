@@ -12,3 +12,4 @@ frontend/dist/
 dist/
 build/
 frontend/tsconfig.tsbuildinfo
+.coverage
