@@ -20,7 +20,7 @@ The harness combines the deepagents built-ins with domain tools and specialist s
 | **Deep research** | `research-analyst` subagent runs literature reviews before methodology design: keyless arXiv + Semantic Scholar search, optional Tavily web search, `fetch_url`, and the `think_tool` reflection loop; citation-backed reviews saved under `research/` |
 | **Async research** | Optional Agent Protocol server (`deep-harness-research-server`) hosts the researcher as a background subagent — the main agent starts a review with `start_async_task`, keeps working (e.g. preparing data), and collects the report with `check_async_task` |
 | **Experiment tracking** | `log_experiment` / `list_experiments` keep every training/evaluation run (metrics, params, artifacts) in a per-user registry, surfaced in the UI **Experiments** tab; figures render directly in the file viewer |
-| **Approval gates** | Per-user, configurable in ⚙ Settings: the agent pauses for human sign-off before committing to the research plan (`submit_plan`, with a review/revise loop), before running training jobs, and optionally before shell commands |
+| **Approval gates** | Per-user, configurable in ⚙ Settings: the agent pauses for human sign-off before committing to the research plan (`submit_plan`, with a review/revise loop), before running training jobs, and before shell commands. Plan, training, and shell gates are **on by default** (the shell runs unsandboxed on the host); relax them per user for trusted single-tenant use |
 | **Self-improving memory** | A per-workspace `memory/AGENTS.md` loaded into the system prompt at startup; the agent records durable lessons there as it works |
 | **Delegation** | Subagents via `task`: `data-scientist`, `ml-engineer`, `data-engineer`, `software-engineer`, `knowledge-engineer` |
 
@@ -210,11 +210,32 @@ and version.
 
 ## Safety notes
 
-- `run_sql` only accepts a single read-only statement; data-modifying work must go
-  through reviewed scripts the agent writes to the workspace.
+- `run_sql` accepts a single read-only statement: the guard strips string
+  literals/comments, rejects any write/DDL keyword anywhere (so data-modifying
+  CTEs like `WITH x AS (DELETE …) SELECT …` and `EXPLAIN <write>` are blocked,
+  not just leading `INSERT`/`UPDATE`), and blocks side-effecting functions
+  (`writefile`, `pg_read_file`, `sys_exec`, `nextval`, …). It also asks the engine
+  to refuse writes (`PRAGMA query_only` on SQLite, `SET TRANSACTION READ ONLY` on
+  Postgres). **This guard is defense-in-depth, not a hard boundary** — a bespoke
+  function on an unknown backend could still have effects, so for untrusted data
+  point `DATABASE_URL` at a **least-privilege read-only DB account**. Real writes
+  go through reviewed scripts the agent writes to the workspace.
 - The agent uses `LocalShellBackend`: shell commands run **directly on this machine**,
-  rooted in the workspace but unsandboxed. Run it inside a container/VM for
-  untrusted tasks or data.
+  rooted in the workspace but unsandboxed. Shell approval is therefore **on by
+  default** (every `execute` pauses for human sign-off). For a true multi-tenant
+  deployment, also run each user's agent in its own container/VM — process-level
+  isolation alone is not a security boundary across mutually-untrusting users.
+- Secrets the app stores on a user's behalf (Modal API tokens) are **encrypted at
+  rest** (Fernet). This protects DB dumps, backups, and logs; it is **not** a
+  defense against the unsandboxed shell above. Set `DEEP_HARNESS_SECRET_KEY` (from
+  a secrets manager) in production — **required for multi-tenant use**; if unset, a
+  dev-only key file is generated under the workspace (logged with a warning), which
+  is readable by anyone who can read that disk.
+- The shared data dictionary and knowledge graph serialize their reads/writes with
+  an in-process lock and write atomically (temp file + rename), so concurrent agent
+  runs can't lose updates or read a half-written file. The lock is **per-process**:
+  run the server single-worker (the default), or add cross-process file locking if
+  you scale to multiple workers/replicas sharing those files.
 
 ## Self-contained by design (no LangChain cloud services)
 

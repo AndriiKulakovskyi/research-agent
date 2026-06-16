@@ -18,6 +18,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from deep_harness.agent import build_agent, sync_workspace_assets
 from deep_harness.compute import ComputeConfig
 from deep_harness.config import get_settings
+from deep_harness.crypto import decrypt_secret
 from deep_harness.server.db import AppDB
 
 
@@ -43,7 +44,7 @@ class AgentManager:
             backend=row["compute_backend"],
             gpu_type=row["gpu_type"],
             modal_token_id=row["modal_token_id"],
-            modal_token_secret=row["modal_token_secret"],
+            modal_token_secret=decrypt_secret(row["modal_token_secret"]),
         )
 
     def interrupt_on(self, user_id: str) -> dict[str, bool]:
@@ -52,7 +53,7 @@ class AgentManager:
         row = self._db.get_user_settings(user_id)
         gate_plan = bool(row["gate_plan"]) if row is not None else True
         gate_training = bool(row["gate_training_jobs"]) if row is not None else True
-        gate_shell = bool(row["gate_shell"]) if row is not None else False
+        gate_shell = bool(row["gate_shell"]) if row is not None else True
         gates: dict[str, bool] = {}
         if gate_plan:
             gates["submit_plan"] = True

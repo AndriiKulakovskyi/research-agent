@@ -12,6 +12,8 @@ import time
 import uuid
 from pathlib import Path
 
+from deep_harness.crypto import encrypt_secret
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -50,7 +52,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
     modal_token_secret TEXT NOT NULL DEFAULT '',
     gate_plan INTEGER NOT NULL DEFAULT 1,
     gate_training_jobs INTEGER NOT NULL DEFAULT 1,
-    gate_shell INTEGER NOT NULL DEFAULT 0,
+    gate_shell INTEGER NOT NULL DEFAULT 1,
     updated_at REAL NOT NULL
 );
 """
@@ -60,7 +62,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
 _USER_SETTINGS_MIGRATIONS = {
     "gate_plan": "INTEGER NOT NULL DEFAULT 1",
     "gate_training_jobs": "INTEGER NOT NULL DEFAULT 1",
-    "gate_shell": "INTEGER NOT NULL DEFAULT 0",
+    "gate_shell": "INTEGER NOT NULL DEFAULT 1",
 }
 
 
@@ -146,7 +148,8 @@ class AppDB:
         gate_shell: bool,
     ) -> None:
         """Update settings; ``None`` for a token field keeps the stored value
-        (so clients never have to echo secrets back)."""
+        (so clients never have to echo secrets back). The Modal token secret is
+        encrypted before storage (see deep_harness.crypto)."""
         with self._connect() as conn:
             existing = conn.execute(
                 "SELECT * FROM user_settings WHERE user_id = ?", (user_id,)
@@ -154,7 +157,9 @@ class AppDB:
             token_id = modal_token_id if modal_token_id is not None else (
                 existing["modal_token_id"] if existing else ""
             )
-            token_secret = modal_token_secret if modal_token_secret is not None else (
+            # A newly supplied secret is encrypted at rest; None means "keep the
+            # already-encrypted value on file".
+            token_secret = encrypt_secret(modal_token_secret) if modal_token_secret is not None else (
                 existing["modal_token_secret"] if existing else ""
             )
             conn.execute(

@@ -91,7 +91,7 @@ class ComputeSettings(BaseModel):
     modal_token_secret_set: bool = False
     gate_plan: bool = True
     gate_training_jobs: bool = True
-    gate_shell: bool = False
+    gate_shell: bool = True
 
 
 class ComputeSettingsUpdate(BaseModel):
@@ -103,7 +103,7 @@ class ComputeSettingsUpdate(BaseModel):
     modal_token_secret: str | None = None
     gate_plan: bool = True
     gate_training_jobs: bool = True
-    gate_shell: bool = False
+    gate_shell: bool = True
 
 
 class ResumeRequest(BaseModel):

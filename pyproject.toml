@@ -16,6 +16,7 @@ dependencies = [
     "langchain-anthropic>=0.3",
     "sqlalchemy>=2.0",
     "rdflib>=7.0",
+    "cryptography>=42.0",
     "pandas>=2.0",
     "python-dotenv>=1.0",
     "fastapi>=0.115",

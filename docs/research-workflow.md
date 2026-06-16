@@ -54,7 +54,9 @@ the checkpointer, so approval is a separate request):
   agent revises `PLAN.md` and re-submits — a real review/revise loop.
 - **Training-job approval** (default on) — `run_training_job` can spend money on
   Modal, so it pauses for an Approve/Reject card showing the script + args.
-- **Shell approval** (default off) — optionally gate every `execute` call.
+- **Shell approval** (default on) — gate every `execute` call. The shell runs on
+  the host without a sandbox, so approval is on by default; turn it off in
+  Settings for a trusted, single-tenant deployment where the noise isn't worth it.
 
 ## Roadmap (identified, not yet built)
 
