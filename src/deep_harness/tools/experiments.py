@@ -13,12 +13,13 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 REGISTRY_REL_PATH = Path("experiments") / "registry.jsonl"
 
 
-def read_registry(workspace: Path) -> list[dict[str, Any]]:
+def read_registry(workspace: Path, initiative_id: str | None = None) -> list[dict[str, Any]]:
     path = workspace / REGISTRY_REL_PATH
     if not path.exists():
         return []
@@ -30,6 +31,8 @@ def read_registry(workspace: Path) -> list[dict[str, Any]]:
                 records.append(json.loads(line))
             except json.JSONDecodeError:
                 continue  # never let one corrupt line hide the rest of the history
+    if initiative_id is not None:
+        records = [r for r in records if r.get("initiative_id") == initiative_id]
     return records
 
 
@@ -44,6 +47,8 @@ def _format_record(r: dict[str, Any]) -> str:
         f"  params: {params}",
         f"  artifacts: {artifacts}",
     ]
+    if r.get("initiative_name"):
+        lines.append(f"  initiative: {r['initiative_name']}")
     if r.get("notes"):
         lines.append(f"  notes: {r['notes']}")
     return "\n".join(lines)
@@ -59,6 +64,7 @@ def make_experiment_tools(workspace: Path) -> list:
         params: dict[str, Any] | None = None,
         artifacts: list[str] | None = None,
         notes: str = "",
+        config: RunnableConfig = None,  # auto-injected by langchain; hidden from the model
     ) -> str:
         """Record one experiment run in the persistent experiment registry.
         ALWAYS call this after every training/evaluation run, including failed
@@ -67,7 +73,9 @@ def make_experiment_tools(workspace: Path) -> list:
         evaluation numbers (include the baseline when you have one); `params`
         the hyperparameters/config that produced them; `artifacts` workspace
         paths (scripts, checkpoints, figures); `notes` one line of interpretation.
+        Runs are automatically filed under the thread's active research initiative.
         """
+        configurable = (config or {}).get("configurable") or {}
         record = {
             "id": uuid.uuid4().hex[:8],
             "name": name,
@@ -76,6 +84,8 @@ def make_experiment_tools(workspace: Path) -> list:
             "params": params or {},
             "artifacts": artifacts or [],
             "notes": notes,
+            "initiative_id": configurable.get("initiative_id"),
+            "initiative_name": configurable.get("initiative_name"),
         }
         path = workspace / REGISTRY_REL_PATH
         path.parent.mkdir(parents=True, exist_ok=True)

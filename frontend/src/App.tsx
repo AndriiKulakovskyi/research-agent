@@ -1,27 +1,43 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  createInitiative,
   createThread,
+  deleteInitiative,
   deleteThread,
   getHistory,
   getToken,
   getTodos,
   getUsername,
+  listInitiatives,
   listThreads,
   logout,
   resumeMessage,
+  setThreadInitiative,
   streamMessage,
+  updateInitiative,
 } from "./api";
 import { Chat } from "./components/Chat";
 import { Login } from "./components/Login";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
 import { SidePanel } from "./components/SidePanel";
-import type { ActionRequest, ChatItem, Decision, StreamEvent, ThreadInfo, TodoItem } from "./types";
+import type {
+  ActionRequest,
+  ChatItem,
+  Decision,
+  Initiative,
+  InitiativeStatus,
+  StreamEvent,
+  ThreadInfo,
+  TodoItem,
+} from "./types";
 
 export default function App() {
   const [authed, setAuthed] = useState(() => getToken() !== null);
   const [threads, setThreads] = useState<ThreadInfo[]>([]);
+  const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeInitiativeId, setActiveInitiativeId] = useState<string | null>(null);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [streamingText, setStreamingText] = useState("");
@@ -35,12 +51,22 @@ export default function App() {
     setThreads(await listThreads());
   }, []);
 
-  useEffect(() => {
-    if (authed) refreshThreads().catch(() => undefined);
-  }, [authed, refreshThreads]);
+  const refreshInitiatives = useCallback(async () => {
+    setInitiatives(await listInitiatives());
+  }, []);
 
-  const openThread = useCallback(async (id: string) => {
+  useEffect(() => {
+    if (authed) {
+      refreshThreads().catch(() => undefined);
+      refreshInitiatives().catch(() => undefined);
+    }
+  }, [authed, refreshThreads, refreshInitiatives]);
+
+  const openThread = useCallback(
+    async (id: string) => {
     setActiveId(id);
+    // Scope the side panel to the thread's initiative.
+    setActiveInitiativeId(threads.find((t) => t.id === id)?.initiative_id ?? null);
     setStreamingText("");
     streamBuffer.current = "";
     const [history, threadTodos] = await Promise.all([getHistory(id), getTodos(id)]);
@@ -62,11 +88,14 @@ export default function App() {
           : { kind: "activity", label: `→ ${calls}`, detail: "", source: "agent" };
       }),
     );
-  }, []);
+    },
+    [threads],
+  );
 
-  async function newThread() {
-    const t = await createThread();
+  async function newThread(initiativeId?: string | null) {
+    const t = await createThread(initiativeId);
     await refreshThreads();
+    setActiveInitiativeId(initiativeId ?? null);
     await openThread(t.id);
   }
 
@@ -142,12 +171,40 @@ export default function App() {
     streamBuffer.current = "";
     setRefreshKey((k) => k + 1);
     refreshThreads().catch(() => undefined);
-  }, [refreshThreads]);
+    refreshInitiatives().catch(() => undefined);
+  }, [refreshThreads, refreshInitiatives]);
+
+  async function moveThread(id: string, initiativeId: string | null) {
+    await setThreadInitiative(id, initiativeId);
+    if (id === activeId) setActiveInitiativeId(initiativeId);
+    await Promise.all([refreshThreads(), refreshInitiatives()]);
+  }
+
+  async function addInitiative(name: string, goal = "") {
+    const created = await createInitiative(name, goal);
+    await refreshInitiatives();
+    setActiveInitiativeId(created.id);
+  }
+
+  async function changeInitiative(
+    id: string,
+    patch: { name?: string; goal?: string; status?: InitiativeStatus },
+  ) {
+    await updateInitiative(id, patch);
+    await refreshInitiatives();
+  }
+
+  async function removeInitiative(id: string) {
+    await deleteInitiative(id);
+    if (activeInitiativeId === id) setActiveInitiativeId(null);
+    await Promise.all([refreshInitiatives(), refreshThreads()]);
+  }
 
   async function send(content: string) {
     let threadId = activeId;
     if (!threadId) {
-      const t = await createThread();
+      // A thread started by typing inherits the currently selected initiative.
+      const t = await createThread(activeInitiativeId);
       threadId = t.id;
       setActiveId(threadId);
     }
@@ -185,14 +242,24 @@ export default function App() {
 
   if (!authed) return <Login onAuthed={() => setAuthed(true)} />;
 
+  const activeInitiative =
+    initiatives.find((i) => i.id === activeInitiativeId) ?? null;
+
   return (
     <div className="layout">
       <Sidebar
         threads={threads}
+        initiatives={initiatives}
         activeId={activeId}
+        activeInitiativeId={activeInitiativeId}
         username={getUsername() ?? ""}
         onSelect={openThread}
+        onSelectInitiative={setActiveInitiativeId}
         onNew={newThread}
+        onNewInitiative={addInitiative}
+        onUpdateInitiative={changeInitiative}
+        onDeleteInitiative={removeInitiative}
+        onMoveThread={moveThread}
         onDelete={removeThread}
         onLogout={() => {
           logout().finally(() => setAuthed(false));
@@ -207,7 +274,7 @@ export default function App() {
         pendingApproval={pendingApproval}
         onDecide={decide}
       />
-      <SidePanel todos={todos} refreshKey={refreshKey} />
+      <SidePanel todos={todos} refreshKey={refreshKey} initiative={activeInitiative} />
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
     </div>
   );

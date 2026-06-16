@@ -222,6 +222,118 @@ def test_experiments_endpoint(client, settings):
     assert client.get("/api/experiments", headers=bob).json() == []
 
 
+def test_initiative_crud_and_thread_grouping(client):
+    headers = _auth(client)
+    # create
+    created = client.post(
+        "/api/initiatives",
+        json={"name": "Customer churn", "goal": "Predict churn 30 days out"},
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    initiative = created.json()
+    assert initiative["status"] == "active"
+    assert initiative["thread_count"] == 0 and initiative["experiment_count"] == 0
+
+    # a thread filed under the initiative carries its id
+    thread = client.post(
+        "/api/threads", json={"initiative_id": initiative["id"]}, headers=headers
+    ).json()
+    assert thread["initiative_id"] == initiative["id"]
+
+    # an unfiled thread has none
+    unfiled = client.post("/api/threads", json={}, headers=headers).json()
+    assert unfiled["initiative_id"] is None
+
+    # list reflects the thread count
+    listed = client.get("/api/initiatives", headers=headers).json()
+    assert listed[0]["thread_count"] == 1
+
+    # update status + goal
+    patched = client.patch(
+        f"/api/initiatives/{initiative['id']}",
+        json={"status": "completed", "goal": "Done"},
+        headers=headers,
+    ).json()
+    assert patched["status"] == "completed" and patched["goal"] == "Done"
+    # invalid status rejected
+    assert (
+        client.patch(
+            f"/api/initiatives/{initiative['id']}", json={"status": "bogus"}, headers=headers
+        ).status_code
+        == 422
+    )
+
+    # move the filed thread out, then delete the initiative
+    moved = client.patch(
+        f"/api/threads/{thread['id']}", json={"initiative_id": None}, headers=headers
+    ).json()
+    assert moved["initiative_id"] is None
+
+    assert (
+        client.delete(f"/api/initiatives/{initiative['id']}", headers=headers).status_code == 204
+    )
+    assert client.get("/api/initiatives", headers=headers).json() == []
+    # threads survive an initiative deletion (they become unfiled)
+    remaining = {t["id"] for t in client.get("/api/threads", headers=headers).json()}
+    assert thread["id"] in remaining and unfiled["id"] in remaining
+
+
+def test_initiative_deletion_unfiles_threads(client):
+    headers = _auth(client)
+    initiative = client.post(
+        "/api/initiatives", json={"name": "Pricing"}, headers=headers
+    ).json()
+    thread = client.post(
+        "/api/threads", json={"initiative_id": initiative["id"]}, headers=headers
+    ).json()
+    client.delete(f"/api/initiatives/{initiative['id']}", headers=headers)
+    after = client.get("/api/threads", headers=headers).json()
+    assert any(t["id"] == thread["id"] and t["initiative_id"] is None for t in after)
+
+
+def test_initiative_isolation_between_users(client):
+    alice = _auth(client, "alice")
+    bob = _auth(client, "bob")
+    initiative = client.post(
+        "/api/initiatives", json={"name": "Alice only"}, headers=alice
+    ).json()
+    # Bob cannot see, update, delete, or file threads under Alice's initiative
+    assert client.get("/api/initiatives", headers=bob).json() == []
+    assert (
+        client.patch(
+            f"/api/initiatives/{initiative['id']}", json={"name": "x"}, headers=bob
+        ).status_code
+        == 404
+    )
+    assert client.delete(f"/api/initiatives/{initiative['id']}", headers=bob).status_code == 404
+    assert (
+        client.post(
+            "/api/threads", json={"initiative_id": initiative["id"]}, headers=bob
+        ).status_code
+        == 404
+    )
+
+
+def test_experiments_filter_by_initiative(client, settings):
+    headers = _auth(client)
+    client.get("/api/experiments", headers=headers)  # provision workspace
+    user_dir = next((settings.workspace_dir / "users").iterdir())
+    from deep_harness.tools.experiments import make_experiment_tools
+
+    log, _ = make_experiment_tools(user_dir)
+    log.invoke(
+        {"name": "churn-a", "metrics": {"auc": 0.9}},
+        config={"configurable": {"initiative_id": "init-1", "initiative_name": "Churn"}},
+    )
+    log.invoke({"name": "loose", "metrics": {"auc": 0.7}})
+
+    all_runs = client.get("/api/experiments", headers=headers).json()
+    assert {r["name"] for r in all_runs} == {"churn-a", "loose"}
+    scoped = client.get("/api/experiments?initiative_id=init-1", headers=headers).json()
+    assert [r["name"] for r in scoped] == ["churn-a"]
+
+
 def test_image_files_served_as_bytes(client, settings):
     headers = _auth(client)
     client.get("/api/files", headers=headers)  # provision workspace
