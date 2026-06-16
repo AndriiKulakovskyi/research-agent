@@ -20,6 +20,7 @@ The harness combines the deepagents built-ins with domain tools and specialist s
 | **Deep research** | `research-analyst` subagent runs literature reviews before methodology design: keyless arXiv + Semantic Scholar search, optional Tavily web search, `fetch_url`, and the `think_tool` reflection loop; citation-backed reviews saved under `research/` |
 | **Async research** | Optional Agent Protocol server (`deep-harness-research-server`) hosts the researcher as a background subagent — the main agent starts a review with `start_async_task`, keeps working (e.g. preparing data), and collects the report with `check_async_task` |
 | **Experiment tracking** | `log_experiment` / `list_experiments` keep every training/evaluation run (metrics, params, artifacts) in a per-user registry, surfaced in the UI **Experiments** tab; figures render directly in the file viewer |
+| **Approval gates** | Per-user, configurable in ⚙ Settings: the agent pauses for human sign-off before committing to the research plan (`submit_plan`, with a review/revise loop), before running training jobs, and optionally before shell commands |
 | **Self-improving memory** | A per-workspace `memory/AGENTS.md` loaded into the system prompt at startup; the agent records durable lessons there as it works |
 | **Delegation** | Subagents via `task`: `data-scientist`, `ml-engineer`, `data-engineer`, `software-engineer`, `knowledge-engineer` |
 
@@ -232,12 +233,25 @@ default). Everything else runs in-process or on local files:
   `provider:model` string supported by `init_chat_model` (including local
   models, e.g. `ollama:...`), making a fully air-gapped deployment possible.
 
-The test suite is the proof: all 12 tests, including a full chat round-trip
-over SSE, run with a fake model and no API keys or network access.
+The default test suite is the proof: the offline tests, including a full chat
+round-trip over SSE, run with a fake model and no API keys or network access.
+On top of that, an opt-in live end-to-end test (`tests/test_agent_e2e.py`)
+builds the **real** agent and calls Claude to verify the agentic loop genuinely
+works — the model picks a tool, the tool runs against a real SQLite database,
+and the model returns the correct answer. It is skipped unless a real
+`ANTHROPIC_API_KEY` is set.
 
 ## Development
 
 ```bash
-pytest          # tool + harness tests (no API calls)
-ruff check .    # lint
+pytest                       # offline tool + harness tests (no API calls)
+pytest -m "not requires_api_key"   # explicitly exclude the live API test
+ruff check .                 # lint
+```
+
+To run the live end-to-end check against Claude (uses a small, cheap model by
+default; override with `DEEP_AGENT_MODEL`):
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... pytest -m requires_api_key
 ```

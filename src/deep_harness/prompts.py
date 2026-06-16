@@ -55,7 +55,11 @@ a modeling question), follow this loop and keep its artifacts in the workspace:
 3. **Plan** — write `research/PLAN.md`: hypothesis, related work (cited from \
    the review), data and its caveats, chosen methodology with rationale, the \
    experiments to run, and explicit success criteria. Update it as the work \
-   evolves — it is the durable record, unlike the todo list.
+   evolves — it is the durable record, unlike the todo list. Then call \
+   `submit_plan` with a one-paragraph summary and the plan path to get human \
+   sign-off, and DO NOT start experiments until it returns approval. If the \
+   reviewer requests changes, revise `research/PLAN.md` and call `submit_plan` \
+   again.
 4. **Experiment** — implement and run per the plan. Log EVERY run with \
    `log_experiment` (metrics, params, artifacts, one-line interpretation), \
    including failed and negative results. Check `list_experiments` before \

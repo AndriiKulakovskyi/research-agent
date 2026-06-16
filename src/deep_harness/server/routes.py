@@ -6,6 +6,7 @@ import mimetypes
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from langgraph.types import Command
 
 from deep_harness.tools.experiments import read_registry
 
@@ -18,13 +19,18 @@ from deep_harness.server.schemas import (
     FileEntry,
     MessageOut,
     MessageRequest,
+    ResumeRequest,
     ThreadCreate,
     ThreadInfo,
     TodoItem,
     TokenResponse,
     UserInfo,
 )
-from deep_harness.server.streaming import serialize_history, stream_agent_events
+from deep_harness.server.streaming import (
+    pending_approvals,
+    serialize_history,
+    stream_agent_events,
+)
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 threads_router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -155,6 +161,38 @@ async def post_message(
     )
 
 
+@threads_router.post("/{thread_id}/resume")
+async def resume_run(
+    thread_id: str,
+    body: ResumeRequest,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Resolve a pending approval gate and stream the continuation as SSE.
+    `approve` runs the gated tool; `reject` skips it; `respond` (or `reject`
+    with a message) feeds the message back to the agent — used to request plan
+    changes. One decision applies to every pending action request in the turn."""
+    _require_thread(request, thread_id, user)
+    agent = request.app.state.agents.get_agent(user.id)
+    config = _thread_config(thread_id)
+
+    state = await agent.aget_state(config)
+    if not getattr(state, "next", None):
+        raise HTTPException(409, "this run is not waiting for approval")
+    count = max(1, len(pending_approvals(state)))
+
+    decision: dict = {"type": body.decision}
+    if body.message:
+        decision["message"] = body.message
+    command = Command(resume={"decisions": [decision] * count})
+
+    return StreamingResponse(
+        stream_agent_events(agent, command, config),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 # -- compute settings -------------------------------------------------------------
 
 
@@ -168,6 +206,9 @@ def get_settings_route(request: Request, user: CurrentUser = Depends(get_current
         gpu_type=row["gpu_type"],
         modal_token_id=row["modal_token_id"],
         modal_token_secret_set=bool(row["modal_token_secret"]),
+        gate_plan=bool(row["gate_plan"]),
+        gate_training_jobs=bool(row["gate_training_jobs"]),
+        gate_shell=bool(row["gate_shell"]),
     )
 
 
@@ -184,7 +225,12 @@ def update_settings_route(
         gpu_type=body.gpu_type,
         modal_token_id=body.modal_token_id,
         modal_token_secret=body.modal_token_secret,
+        gate_plan=body.gate_plan,
+        gate_training_jobs=body.gate_training_jobs,
+        gate_shell=body.gate_shell,
     )
+    # Gating is fixed at agent-build time — drop the cached agent so the change applies.
+    request.app.state.agents.invalidate(user.id)
     return get_settings_route(request, user)
 
 

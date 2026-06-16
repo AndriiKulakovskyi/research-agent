@@ -398,6 +398,72 @@ textarea:focus {
   gap: 10px;
   margin-top: 6px;
 }
+.section-heading {
+  margin: 8px 0 0;
+  font-size: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* ---- approval card ---- */
+.composer.approval {
+  display: block;
+}
+.approval-card {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.approval-title {
+  font-weight: 600;
+}
+.approval-title code,
+.approval-args {
+  font-family: var(--mono);
+}
+.approval-summary {
+  margin: 0;
+  line-height: 1.5;
+}
+.approval-args,
+.plan-body {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.approval-card details summary {
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.approval-card .feedback {
+  width: 100%;
+  resize: vertical;
+}
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
 
 .file-image {
   max-width: 100%;
