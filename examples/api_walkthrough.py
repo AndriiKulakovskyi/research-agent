@@ -1,7 +1,7 @@
 """End-to-end walkthrough of the Deep Harness HTTP API.
 
 Prerequisites:
-    deep-harness-server                  # in another terminal, with ANTHROPIC_API_KEY set
+    deep-harness-server                  # in another terminal, with provider API key set
     python examples/seed_demo.py         # optional: demo data to analyze
     pip install httpx                    # (included in the dev extras)
 

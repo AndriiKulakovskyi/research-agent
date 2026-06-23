@@ -1,4 +1,4 @@
-"""End-to-end API tests with a fake chat model (no Anthropic calls)."""
+"""End-to-end API tests with a fake chat model (no provider API calls)."""
 
 import json
 

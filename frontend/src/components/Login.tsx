@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { authenticate } from "../api";
 
 export function Login({ onAuthed }: { onAuthed: () => void }) {
@@ -25,10 +26,10 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={submit}>
+        <div className="login-mark">
+          <Sparkles size={20} />
+        </div>
         <h1>Deep Harness</h1>
-        <p className="login-tagline">
-          Agentic workbench for data science, engineering &amp; semantic data work
-        </p>
         <input
           placeholder="username"
           value={username}
@@ -42,8 +43,9 @@ export function Login({ onAuthed }: { onAuthed: () => void }) {
           onChange={(e) => setPassword(e.target.value)}
         />
         {error && <div className="error">{error}</div>}
-        <button type="submit" disabled={busy || !username || !password}>
+        <button className="primary action-button" type="submit" disabled={busy || !username || !password}>
           {mode === "login" ? "Sign in" : "Create account"}
+          <ArrowRight size={16} />
         </button>
         <button
           type="button"

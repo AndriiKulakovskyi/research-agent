@@ -1,10 +1,12 @@
 import os
 
 from deep_harness.agent import build_agent
+from deep_harness.model_providers import required_api_key_envs
 
 
 def test_agent_builds_and_exposes_tools(settings, monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", os.environ.get("ANTHROPIC_API_KEY", "test-key"))
+    for key in required_api_key_envs(settings.model):
+        monkeypatch.setenv(key, os.environ.get(key, "test-key"))
     agent = build_agent(settings)
     assert agent.name == "deep-harness-agent"
     # The compiled graph should be invokable shape-wise (we don't call the API here);

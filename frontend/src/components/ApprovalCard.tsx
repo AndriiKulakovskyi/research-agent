@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Check, FileCheck2, Play, RotateCcw, X } from "lucide-react";
 import { readFile } from "../api";
 import type { ActionRequest, Decision } from "../types";
 
@@ -40,13 +41,15 @@ function PlanCard({ request, busy, onDecide }: Props) {
       />
       <div className="approval-actions">
         <button
-          className="ghost"
+          className="ghost action-button"
           disabled={busy || !feedback.trim()}
           onClick={() => onDecide("respond", feedback.trim())}
         >
+          <RotateCcw size={15} />
           Request changes
         </button>
-        <button className="primary" disabled={busy} onClick={() => onDecide("approve", null)}>
+        <button className="primary action-button" disabled={busy} onClick={() => onDecide("approve", null)}>
+          <FileCheck2 size={16} />
           Approve &amp; proceed
         </button>
       </div>
@@ -63,10 +66,12 @@ function ToolCard({ request, busy, onDecide }: Props) {
       </div>
       <pre className="approval-args">{JSON.stringify(request.args, null, 2)}</pre>
       <div className="approval-actions">
-        <button className="ghost" disabled={busy} onClick={() => onDecide("reject", null)}>
+        <button className="ghost action-button" disabled={busy} onClick={() => onDecide("reject", null)}>
+          <X size={15} />
           Reject
         </button>
-        <button className="primary" disabled={busy} onClick={() => onDecide("approve", null)}>
+        <button className="primary action-button" disabled={busy} onClick={() => onDecide("approve", null)}>
+          {request.name === "execute" ? <Play size={16} /> : <Check size={16} />}
           Approve &amp; run
         </button>
       </div>

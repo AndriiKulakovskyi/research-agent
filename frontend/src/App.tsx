@@ -26,6 +26,7 @@ import type {
   ChatItem,
   Decision,
   Initiative,
+  InspectorTab,
   InitiativeStatus,
   StreamEvent,
   ThreadInfo,
@@ -45,6 +46,9 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<ActionRequest | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("plan");
   const streamBuffer = useRef("");
 
   const refreshThreads = useCallback(async () => {
@@ -64,33 +68,38 @@ export default function App() {
 
   const openThread = useCallback(
     async (id: string) => {
-    setActiveId(id);
-    // Scope the side panel to the thread's initiative.
-    setActiveInitiativeId(threads.find((t) => t.id === id)?.initiative_id ?? null);
-    setStreamingText("");
-    streamBuffer.current = "";
-    const [history, threadTodos] = await Promise.all([getHistory(id), getTodos(id)]);
-    setTodos(threadTodos);
-    setItems(
-      history.map((m): ChatItem => {
-        if (m.role === "user") return { kind: "user", content: m.content };
-        if (m.role === "tool") {
-          return {
-            kind: "activity",
-            label: m.tool_name ?? "tool",
-            detail: m.content.slice(0, 120),
-            source: "agent",
-          };
-        }
-        const calls = m.tool_calls.map((c) => c.name).join(", ");
-        return m.content
-          ? { kind: "assistant", content: m.content, source: "agent" }
-          : { kind: "activity", label: `→ ${calls}`, detail: "", source: "agent" };
-      }),
-    );
+      setActiveId(id);
+      // Scope the inspector to the thread's initiative.
+      setActiveInitiativeId(threads.find((t) => t.id === id)?.initiative_id ?? null);
+      setStreamingText("");
+      streamBuffer.current = "";
+      const [history, threadTodos] = await Promise.all([getHistory(id), getTodos(id)]);
+      setTodos(threadTodos);
+      setItems(
+        history.map((m): ChatItem => {
+          if (m.role === "user") return { kind: "user", content: m.content };
+          if (m.role === "tool") {
+            return {
+              kind: "activity",
+              label: m.tool_name ?? "tool",
+              detail: m.content.slice(0, 120),
+              source: "agent",
+            };
+          }
+          const calls = m.tool_calls.map((c) => c.name).join(", ");
+          return m.content
+            ? { kind: "assistant", content: m.content, source: "agent" }
+            : { kind: "activity", label: `→ ${calls}`, detail: "", source: "agent" };
+        }),
+      );
     },
     [threads],
   );
+
+  function openInspector(tab: InspectorTab) {
+    setInspectorTab(tab);
+    setInspectorOpen(true);
+  }
 
   async function newThread(initiativeId?: string | null) {
     const t = await createThread(initiativeId);
@@ -246,7 +255,11 @@ export default function App() {
     initiatives.find((i) => i.id === activeInitiativeId) ?? null;
 
   return (
-    <div className="layout">
+    <div
+      className={`layout ${sidebarOpen ? "sidebar-visible" : "sidebar-hidden"} ${
+        inspectorOpen ? "inspector-visible" : "inspector-hidden"
+      }`}
+    >
       <Sidebar
         threads={threads}
         initiatives={initiatives}
@@ -265,6 +278,7 @@ export default function App() {
           logout().finally(() => setAuthed(false));
         }}
         onSettings={() => setShowSettings(true)}
+        onClose={() => setSidebarOpen(false)}
       />
       <Chat
         items={items}
@@ -273,8 +287,30 @@ export default function App() {
         onSend={send}
         pendingApproval={pendingApproval}
         onDecide={decide}
+        initiative={activeInitiative}
+        todos={todos}
+        sidebarOpen={sidebarOpen}
+        inspectorOpen={inspectorOpen}
+        activeInspectorTab={inspectorTab}
+        onToggleSidebar={() => setSidebarOpen((open) => !open)}
+        onOpenInspector={openInspector}
       />
-      <SidePanel todos={todos} refreshKey={refreshKey} initiative={activeInitiative} />
+      {inspectorOpen && (
+        <button
+          className="inspector-scrim"
+          aria-label="Close inspector"
+          onClick={() => setInspectorOpen(false)}
+        />
+      )}
+      <SidePanel
+        todos={todos}
+        refreshKey={refreshKey}
+        initiative={activeInitiative}
+        open={inspectorOpen}
+        activeTab={inspectorTab}
+        onTabChange={setInspectorTab}
+        onClose={() => setInspectorOpen(false)}
+      />
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
     </div>
   );

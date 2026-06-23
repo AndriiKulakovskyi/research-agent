@@ -2,7 +2,8 @@
 
 A deep agent harness for **data science & engineering, coding, planning, and semantic
 database work** — built on [`deepagents`](https://docs.langchain.com/oss/python/deepagents)
-and [LangGraph](https://github.com/langchain-ai/langgraph), powered by Claude.
+and [LangGraph](https://github.com/langchain-ai/langgraph), powered by OpenAI
+by default with Anthropic and Gemini available via configuration.
 
 ## What it can do
 
@@ -36,8 +37,14 @@ with live agent activity, plan panel, workspace file browser).
 
 ```bash
 pip install -e ".[dev]"
-cp .env.example .env   # add your ANTHROPIC_API_KEY
+cp .env.example .env   # add your provider API key
 ```
+
+The default model is `openai:gpt-5.5` and requires `OPENAI_API_KEY`.
+Set `DEEP_AGENT_MODEL` to switch providers, for example
+`google_genai:gemini-3.5-flash` with `GEMINI_API_KEY` (or `GOOGLE_API_KEY`,
+which takes precedence) or `anthropic:claude-opus-4-8` with
+`ANTHROPIC_API_KEY`.
 
 ## Run the application (backend + UI)
 
@@ -62,7 +69,7 @@ With Docker:
 
 ```bash
 docker build -t deep-harness .
-docker run -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... -v deep-harness-data:/data deep-harness
+docker run -p 8000:8000 -e OPENAI_API_KEY=sk-proj-... -v deep-harness-data:/data deep-harness
 ```
 
 ### API surface
@@ -112,7 +119,7 @@ MySQL, SQLite, ...).
 from deep_harness import build_agent, Settings
 
 agent = build_agent(Settings(
-    model="anthropic:claude-opus-4-8",
+    model="openai:gpt-5.5",
     database_url="postgresql+psycopg://user:pass@host/db",
 ))
 
@@ -141,7 +148,7 @@ React UI (frontend/)  ──HTTP/SSE──▶  FastAPI (src/deep_harness/server/
                                           │  per-user agent instances,
                                           │  shared SQLite checkpointer
                                           ▼
-deep-harness (orchestrator, Claude Opus 4.8)
+deep-harness (orchestrator, OpenAI GPT-5.5 by default)
 ├── built-ins: write_todos · ls/read/write/edit/glob/grep · execute (shell) · task
 ├── domain tools: run_sql · describe_table · list_tables
 │                 search/describe/define_variable (data dictionary)
@@ -239,8 +246,8 @@ and version.
 
 ## Self-contained by design (no LangChain cloud services)
 
-The app has **one** external runtime dependency: the LLM API (Anthropic by
-default). Everything else runs in-process or on local files:
+The app has **one** external runtime dependency: the configured LLM API (OpenAI
+by default). Everything else runs in-process or on local files:
 
 - **LangGraph is used as an open-source library**, not as LangGraph Platform —
   no `langgraph-api` server, no `langgraph.json`, no platform account.
@@ -257,14 +264,16 @@ default). Everything else runs in-process or on local files:
 - Even the model is swappable: `DEEP_AGENT_MODEL` takes any
   `provider:model` string supported by `init_chat_model` (including local
   models, e.g. `ollama:...`), making a fully air-gapped deployment possible.
+  Common hosted options are `openai:gpt-5.5`,
+  `google_genai:gemini-3.5-flash`, and `anthropic:claude-opus-4-8`.
 
 The default test suite is the proof: the offline tests, including a full chat
 round-trip over SSE, run with a fake model and no API keys or network access.
 On top of that, an opt-in live end-to-end test (`tests/test_agent_e2e.py`)
-builds the **real** agent and calls Claude to verify the agentic loop genuinely
-works — the model picks a tool, the tool runs against a real SQLite database,
-and the model returns the correct answer. It is skipped unless a real
-`ANTHROPIC_API_KEY` is set.
+builds the **real** agent and calls the configured provider to verify the
+agentic loop genuinely works — the model picks a tool, the tool runs against a
+real SQLite database, and the model returns the correct answer. It is skipped
+unless a real API key for `DEEP_AGENT_MODEL` is set.
 
 ## Development
 
@@ -274,9 +283,14 @@ pytest -m "not requires_api_key"   # explicitly exclude the live API test
 ruff check .                 # lint
 ```
 
-To run the live end-to-end check against Claude (uses a small, cheap model by
-default; override with `DEEP_AGENT_MODEL`):
+To run the live end-to-end check against the default OpenAI model:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-... pytest -m requires_api_key
+OPENAI_API_KEY=sk-proj-... pytest -m requires_api_key
+```
+
+To run it against Gemini:
+
+```bash
+DEEP_AGENT_MODEL=google_genai:gemini-3.5-flash GEMINI_API_KEY=key-... pytest -m requires_api_key
 ```

@@ -8,7 +8,9 @@ import sys
 import uuid
 
 from deep_harness.agent import build_agent
+from deep_harness.config import DEFAULT_MODEL
 from deep_harness.messages import PREVIEW_CHARS, message_text
+from deep_harness.model_providers import missing_api_key_warning
 
 
 def _print_update(update: dict) -> None:
@@ -47,16 +49,18 @@ def main() -> None:
     )
     parser.add_argument("task", nargs="?", help="one-shot task; omit for interactive mode")
     parser.add_argument(
-        "--model", help="override model (provider:model), e.g. anthropic:claude-opus-4-8"
+        "--model",
+        help=(
+            "override model (provider:model), e.g. openai:gpt-5.5, "
+            "google_genai:gemini-3.5-flash, anthropic:claude-opus-4-8"
+        ),
     )
     args = parser.parse_args()
 
     if args.model:
         os.environ["DEEP_AGENT_MODEL"] = args.model
-    if not os.environ.get("ANTHROPIC_API_KEY") and "anthropic" in os.environ.get(
-        "DEEP_AGENT_MODEL", "anthropic"
-    ):
-        print("warning: ANTHROPIC_API_KEY is not set", file=sys.stderr)
+    if warning := missing_api_key_warning(os.environ.get("DEEP_AGENT_MODEL", DEFAULT_MODEL)):
+        print(warning, file=sys.stderr)
 
     agent = build_agent()
     thread_id = str(uuid.uuid4())

@@ -6,7 +6,8 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from deep_harness.config import Settings, set_settings
+from deep_harness.config import DEFAULT_MODEL, Settings, set_settings
+from deep_harness.model_providers import required_api_key_envs
 
 
 class ToolBindingFakeModel(GenericFakeChatModel):
@@ -62,7 +63,7 @@ def tool_call_message(name: str, args: dict, call_id: str = "call1") -> AIMessag
 def settings(tmp_path):
     """Isolated settings pointing every artifact at a temp directory."""
     s = Settings(
-        model="anthropic:claude-opus-4-8",
+        model=DEFAULT_MODEL,
         workspace_dir=tmp_path / "workspace",
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         data_dictionary_path=tmp_path / "dictionary.json",
@@ -76,11 +77,20 @@ def settings(tmp_path):
 
 @pytest.fixture
 def real_api_key():
-    """Skip unless a real Anthropic key is configured (opt-in for live e2e).
+    """Skip unless a real key is configured for the selected live-test provider.
 
-    The offline build test uses the literal ``"test-key"`` as a placeholder, so
-    treat that value the same as an absent key."""
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key or key == "test-key":
-        pytest.skip("ANTHROPIC_API_KEY not set; skipping live-API e2e test")
-    return key
+    Offline tests use placeholder keys, so treat those the same as absent keys.
+    """
+    model = os.environ.get("DEEP_AGENT_MODEL", DEFAULT_MODEL)
+    keys = required_api_key_envs(model)
+    if not keys:
+        pytest.skip(f"no known API-key requirement for model {model!r}")
+
+    placeholders = {"", "test-key", "sk-ant-...", "sk-proj-...", "key-...", "..."}
+    for key_name in keys:
+        value = os.environ.get(key_name, "")
+        if value and value not in placeholders:
+            return value
+    pytest.skip(
+        f"{' or '.join(keys)} not set for {model!r}; skipping live-API e2e test"
+    )

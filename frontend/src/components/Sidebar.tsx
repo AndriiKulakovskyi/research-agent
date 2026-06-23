@@ -1,4 +1,15 @@
 import { useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  LogOut,
+  MessageSquare,
+  PanelLeftClose,
+  Pencil,
+  Plus,
+  Settings,
+  Trash2,
+} from "lucide-react";
 import type { Initiative, InitiativeStatus, ThreadInfo } from "../types";
 
 interface Props {
@@ -20,6 +31,7 @@ interface Props {
   onDelete: (id: string) => void;
   onLogout: () => void;
   onSettings: () => void;
+  onClose: () => void;
 }
 
 const STATUSES: InitiativeStatus[] = ["active", "completed", "archived"];
@@ -40,6 +52,7 @@ export function Sidebar({
   onDelete,
   onLogout,
   onSettings,
+  onClose,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [newName, setNewName] = useState<string | null>(null);
@@ -70,7 +83,10 @@ export function Sidebar({
         className={`thread-item ${t.id === activeId ? "active" : ""}`}
         onClick={() => onSelect(t.id)}
       >
-        <span className="thread-title">{t.title}</span>
+        <span className="thread-title">
+          <MessageSquare size={14} />
+          {t.title}
+        </span>
         <span className="thread-controls">
           <select
             className="move-select"
@@ -87,14 +103,15 @@ export function Sidebar({
             ))}
           </select>
           <button
-            className="ghost small"
+            className="icon-button subtle"
             title="Delete thread"
+            aria-label="Delete thread"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(t.id);
             }}
           >
-            ✕
+            <Trash2 size={14} />
           </button>
         </span>
       </div>
@@ -118,7 +135,7 @@ export function Sidebar({
               toggle(initiative.id);
             }}
           >
-            {isCollapsed ? "▸" : "▾"}
+            {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </button>
           <span className="initiative-name">{initiative.name}</span>
           <span className={`status-pill status-${initiative.status}`}>{initiative.status}</span>
@@ -140,36 +157,39 @@ export function Sidebar({
               ))}
             </select>
             <button
-              className="ghost small"
+              className="icon-button subtle"
               title="Rename initiative"
+              aria-label="Rename initiative"
               onClick={(e) => {
                 e.stopPropagation();
                 const name = window.prompt("Rename initiative", initiative.name);
                 if (name && name.trim()) onUpdateInitiative(initiative.id, { name: name.trim() });
               }}
             >
-              ✎
+              <Pencil size={14} />
             </button>
             <button
-              className="ghost small"
+              className="icon-button subtle"
               title="New thread in this initiative"
+              aria-label="New thread in this initiative"
               onClick={(e) => {
                 e.stopPropagation();
                 onNew(initiative.id);
               }}
             >
-              +
+              <Plus size={14} />
             </button>
             <button
-              className="ghost small"
+              className="icon-button subtle"
               title="Delete initiative (threads are kept)"
+              aria-label="Delete initiative"
               onClick={(e) => {
                 e.stopPropagation();
                 if (window.confirm(`Delete initiative "${initiative.name}"? Its threads are kept.`))
                   onDeleteInitiative(initiative.id);
               }}
             >
-              ✕
+              <Trash2 size={14} />
             </button>
           </span>
         </div>
@@ -189,16 +209,32 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="brand">Deep Harness</span>
-        <button className="primary small" onClick={() => onNew()}>
-          + New
-        </button>
+        <span className="sidebar-header-actions">
+          <button className="new-chat-button" onClick={() => onNew()}>
+            <Plus size={16} />
+            New
+          </button>
+          <button
+            className="icon-button subtle"
+            title="Collapse Deep Harness"
+            aria-label="Collapse Deep Harness"
+            onClick={onClose}
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        </span>
       </div>
 
       <div className="initiatives-bar">
         <span className="section-label">Initiatives</span>
         {newName === null ? (
-          <button className="ghost small" title="New initiative" onClick={() => setNewName("")}>
-            + New initiative
+          <button
+            className="icon-button subtle"
+            title="New initiative"
+            aria-label="New initiative"
+            onClick={() => setNewName("")}
+          >
+            <Plus size={14} />
           </button>
         ) : (
           <input
@@ -228,14 +264,15 @@ export function Sidebar({
             <span className="muted count">{unfiled.length}</span>
             <span className="initiative-controls">
               <button
-                className="ghost small"
+                className="icon-button subtle"
                 title="New unfiled thread"
+                aria-label="New unfiled thread"
                 onClick={(e) => {
                   e.stopPropagation();
                   onNew(null);
                 }}
               >
-                +
+                <Plus size={14} />
               </button>
             </span>
           </div>
@@ -248,15 +285,18 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
-        <span className="muted">@{username}</span>
-        <span>
-          <button className="ghost small" title="Compute settings" onClick={onSettings}>
-            ⚙ Settings
+        <div className="account-chip">
+          <span className="avatar-dot">{username.slice(0, 1).toUpperCase()}</span>
+          <span>@{username}</span>
+        </div>
+        <div className="footer-actions">
+          <button className="icon-button subtle" title="Compute settings" aria-label="Compute settings" onClick={onSettings}>
+            <Settings size={16} />
           </button>
-          <button className="ghost small" onClick={onLogout}>
-            Sign out
+          <button className="icon-button subtle" title="Sign out" aria-label="Sign out" onClick={onLogout}>
+            <LogOut size={16} />
           </button>
-        </span>
+        </div>
       </div>
     </aside>
   );

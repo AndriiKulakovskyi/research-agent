@@ -1,18 +1,17 @@
-"""Live end-to-end tests that exercise the real agentic loop against Claude.
+"""Live end-to-end tests that exercise the real agentic loop against an LLM API.
 
 Unlike the rest of the suite (which injects fake/scripted models), these tests
-build the real agent and call the Anthropic API. They prove the loop genuinely
-works: given a task, Claude decides to call a tool, the tool runs against real
-data, and Claude turns the tool result into a correct answer.
+build the real agent and call the configured provider. They prove the loop
+genuinely works: given a task, the model decides to call a tool, the tool runs
+against real data, and the model turns the tool result into a correct answer.
 
 They are opt-in: the ``real_api_key`` fixture skips them unless a real
-``ANTHROPIC_API_KEY`` is set, so the default ``pytest`` run stays offline. Run
-them with::
+provider API key is set, so the default ``pytest`` run stays offline. Run them
+with the default OpenAI model::
 
-    ANTHROPIC_API_KEY=sk-ant-... pytest -m requires_api_key
+    OPENAI_API_KEY=sk-proj-... pytest -m requires_api_key
 
-The model defaults to a small/fast Claude (cheap — we're checking the loop, not
-model quality) and is overridable via ``DEEP_AGENT_MODEL``.
+or choose a different provider with ``DEEP_AGENT_MODEL`` and its matching key.
 """
 
 from __future__ import annotations
@@ -23,10 +22,10 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from deep_harness.agent import build_agent
+from deep_harness.config import DEFAULT_MODEL
 from deep_harness.messages import message_text
 
-# Small, fast model by default; override with DEEP_AGENT_MODEL for a fuller run.
-E2E_MODEL = os.environ.get("DEEP_AGENT_MODEL", "anthropic:claude-haiku-4-5-20251001")
+E2E_MODEL = os.environ.get("DEEP_AGENT_MODEL", DEFAULT_MODEL)
 
 # Database tools the agent may reach for when answering a question about a table.
 DB_TOOL_NAMES = {"list_tables", "describe_table", "run_sql"}
@@ -52,7 +51,7 @@ def _tool_messages(messages, names=None):
 
 
 @pytest.mark.requires_api_key
-def test_agent_answers_db_question_with_real_claude(settings, real_api_key):
+def test_agent_answers_db_question_with_real_model(settings, real_api_key):
     """The agent inspects a real DB via a tool and answers the row count."""
     _seed_db(settings)
     agent = build_agent(settings, model=E2E_MODEL)
