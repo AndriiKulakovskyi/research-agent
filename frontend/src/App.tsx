@@ -46,7 +46,8 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<ActionRequest | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("plan");
   const streamBuffer = useRef("");
 
@@ -254,7 +255,11 @@ export default function App() {
     initiatives.find((i) => i.id === activeInitiativeId) ?? null;
 
   return (
-    <div className="layout">
+    <div
+      className={`layout ${sidebarOpen ? "sidebar-visible" : "sidebar-hidden"} ${
+        inspectorOpen ? "inspector-visible" : "inspector-hidden"
+      }`}
+    >
       <Sidebar
         threads={threads}
         initiatives={initiatives}
@@ -273,6 +278,7 @@ export default function App() {
           logout().finally(() => setAuthed(false));
         }}
         onSettings={() => setShowSettings(true)}
+        onClose={() => setSidebarOpen(false)}
       />
       <Chat
         items={items}
@@ -283,7 +289,10 @@ export default function App() {
         onDecide={decide}
         initiative={activeInitiative}
         todos={todos}
+        sidebarOpen={sidebarOpen}
         inspectorOpen={inspectorOpen}
+        activeInspectorTab={inspectorTab}
+        onToggleSidebar={() => setSidebarOpen((open) => !open)}
         onOpenInspector={openInspector}
       />
       {inspectorOpen && (

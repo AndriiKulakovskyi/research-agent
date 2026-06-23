@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Beaker, Folder, ListChecks, Send, Sparkles } from "lucide-react";
+import { Beaker, Folder, ListChecks, PanelLeftOpen, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ActionRequest, ChatItem, Decision, Initiative, InspectorTab, TodoItem } from "../types";
 import { ApprovalCard } from "./ApprovalCard";
@@ -13,7 +13,10 @@ interface Props {
   onDecide: (decision: Decision, message: string | null) => void;
   initiative: Initiative | null;
   todos: TodoItem[];
+  sidebarOpen: boolean;
   inspectorOpen: boolean;
+  activeInspectorTab: InspectorTab;
+  onToggleSidebar: () => void;
   onOpenInspector: (tab: InspectorTab) => void;
 }
 
@@ -32,7 +35,10 @@ export function Chat({
   onDecide,
   initiative,
   todos,
+  sidebarOpen,
   inspectorOpen,
+  activeInspectorTab,
+  onToggleSidebar,
   onOpenInspector,
 }: Props) {
   const [draft, setDraft] = useState("");
@@ -63,15 +69,26 @@ export function Chat({
           {initiative?.goal && <div className="chat-subtitle">{initiative.goal}</div>}
         </div>
         <div className="chat-actions" aria-label="Workspace panels">
+          <button
+            className={`icon-button labeled ${sidebarOpen ? "active" : ""}`}
+            title={sidebarOpen ? "Collapse Deep Harness" : "Open Deep Harness"}
+            onClick={onToggleSidebar}
+            aria-pressed={sidebarOpen}
+          >
+            <PanelLeftOpen size={17} />
+            <span>Deep Harness</span>
+          </button>
           {INSPECTOR_ACTIONS.map((action) => {
             const Icon = action.icon;
             return (
               <button
                 key={action.tab}
-                className="icon-button labeled"
+                className={`icon-button labeled ${
+                  inspectorOpen && activeInspectorTab === action.tab ? "active" : ""
+                }`}
                 title={`Open ${action.label}`}
                 onClick={() => onOpenInspector(action.tab)}
-                aria-pressed={inspectorOpen}
+                aria-pressed={inspectorOpen && activeInspectorTab === action.tab}
               >
                 <Icon size={17} />
                 <span>{action.label}</span>
@@ -134,7 +151,7 @@ export function Chat({
         <div className="composer">
           <textarea
             value={draft}
-            placeholder={busy ? "Agent is working…" : "Message Deep Harness"}
+            placeholder={busy ? "Agent is working…" : "Enter your question"}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -152,7 +169,7 @@ export function Chat({
             title="Send"
             aria-label="Send message"
           >
-            <Send size={18} />
+            <span>Send</span>
           </button>
         </div>
       )}

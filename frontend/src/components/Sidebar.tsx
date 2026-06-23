@@ -4,6 +4,7 @@ import {
   ChevronRight,
   LogOut,
   MessageSquare,
+  PanelLeftClose,
   Pencil,
   Plus,
   Settings,
@@ -30,6 +31,7 @@ interface Props {
   onDelete: (id: string) => void;
   onLogout: () => void;
   onSettings: () => void;
+  onClose: () => void;
 }
 
 const STATUSES: InitiativeStatus[] = ["active", "completed", "archived"];
@@ -50,6 +52,7 @@ export function Sidebar({
   onDelete,
   onLogout,
   onSettings,
+  onClose,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [newName, setNewName] = useState<string | null>(null);
@@ -206,10 +209,20 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="brand">Deep Harness</span>
-        <button className="new-chat-button" onClick={() => onNew()}>
-          <Plus size={16} />
-          New
-        </button>
+        <span className="sidebar-header-actions">
+          <button className="new-chat-button" onClick={() => onNew()}>
+            <Plus size={16} />
+            New
+          </button>
+          <button
+            className="icon-button subtle"
+            title="Collapse Deep Harness"
+            aria-label="Collapse Deep Harness"
+            onClick={onClose}
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        </span>
       </div>
 
       <div className="initiatives-bar">
