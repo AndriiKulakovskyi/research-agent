@@ -1,18 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  BarChart3,
+  CheckCircle2,
+  Circle,
+  FileText,
+  FlaskConical,
+  Folder,
+  ListChecks,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { listExperiments, listFiles, readFile, type FileContent } from "../api";
-import type { ExperimentRecord, FileEntry, Initiative, TodoItem } from "../types";
+import type { ExperimentRecord, FileEntry, Initiative, InspectorTab, TodoItem } from "../types";
 
-const STATUS_ICON: Record<string, string> = {
-  pending: "○",
-  in_progress: "◐",
-  completed: "●",
+const STATUS_ICON: Record<string, LucideIcon> = {
+  pending: Circle,
+  in_progress: ListChecks,
+  completed: CheckCircle2,
 };
 
-// Distinct, dark-theme-friendly colors for the compared runs.
-const RUN_COLORS = ["#e0a458", "#5aa9e6", "#7bd88f", "#d98ad9", "#e0635a", "#b0b85a"];
-
-type Tab = "tasks" | "files" | "experiments";
+const RUN_COLORS = ["#0f766e", "#2563eb", "#9333ea", "#ea580c", "#dc2626", "#4b5563"];
 
 function asNumber(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -28,12 +37,19 @@ export function SidePanel({
   todos,
   refreshKey,
   initiative,
+  open,
+  activeTab,
+  onTabChange,
+  onClose,
 }: {
   todos: TodoItem[];
   refreshKey: number;
   initiative: Initiative | null;
+  open: boolean;
+  activeTab: InspectorTab;
+  onTabChange: (tab: InspectorTab) => void;
+  onClose: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("tasks");
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [experiments, setExperiments] = useState<ExperimentRecord[]>([]);
   const [openFile, setOpenFile] = useState<({ path: string } & FileContent) | null>(null);
@@ -41,10 +57,11 @@ export function SidePanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (tab === "files") listFiles().then(setFiles).catch(() => setFiles([]));
-    if (tab === "experiments")
+    if (!open) return;
+    if (activeTab === "files") listFiles().then(setFiles).catch(() => setFiles([]));
+    if (activeTab === "experiments")
       listExperiments(initiative?.id).then(setExperiments).catch(() => setExperiments([]));
-  }, [tab, refreshKey, initiative?.id]);
+  }, [activeTab, open, refreshKey, initiative?.id]);
 
   // Reset comparison selection whenever the visible run set changes.
   useEffect(() => {
@@ -52,10 +69,10 @@ export function SidePanel({
     setCompare(false);
   }, [initiative?.id, refreshKey]);
 
-  async function open(path: string) {
+  async function openWorkspaceFile(path: string) {
     const content = await readFile(path);
     setOpenFile({ path, ...content });
-    setTab("files");
+    onTabChange("files");
   }
 
   function toggleSelected(id: string) {
@@ -99,65 +116,85 @@ export function SidePanel({
   }, [selectedRuns]);
 
   return (
-    <aside className="side-panel">
-      {initiative && (
-        <div className="initiative-overview">
-          <div className="initiative-overview-head">
-            <span className="initiative-overview-name">{initiative.name}</span>
-            <span className={`status-pill status-${initiative.status}`}>{initiative.status}</span>
-          </div>
-          {initiative.goal && <div className="muted initiative-goal">{initiative.goal}</div>}
-          <div className="muted initiative-counts">
-            {initiative.thread_count} thread{initiative.thread_count === 1 ? "" : "s"} ·{" "}
-            {initiative.experiment_count} run{initiative.experiment_count === 1 ? "" : "s"}
-          </div>
+    <aside className={`side-panel ${open ? "open" : ""}`} aria-hidden={!open}>
+      <div className="inspector-header">
+        <div>
+          <div className="inspector-title">Inspector</div>
+          {initiative && (
+            <div className="inspector-context">
+              {initiative.name} · {initiative.thread_count} thread
+              {initiative.thread_count === 1 ? "" : "s"} · {initiative.experiment_count} run
+              {initiative.experiment_count === 1 ? "" : "s"}
+            </div>
+          )}
         </div>
-      )}
+        <button className="icon-button" onClick={onClose} title="Close inspector" aria-label="Close inspector">
+          <X size={18} />
+        </button>
+      </div>
 
       <div className="tabs">
-        <button className={tab === "tasks" ? "tab active" : "tab"} onClick={() => setTab("tasks")}>
+        <button
+          className={activeTab === "plan" ? "tab active" : "tab"}
+          onClick={() => onTabChange("plan")}
+        >
+          <ListChecks size={16} />
           Plan
         </button>
-        <button className={tab === "files" ? "tab active" : "tab"} onClick={() => setTab("files")}>
+        <button
+          className={activeTab === "files" ? "tab active" : "tab"}
+          onClick={() => onTabChange("files")}
+        >
+          <Folder size={16} />
           Workspace
         </button>
         <button
-          className={tab === "experiments" ? "tab active" : "tab"}
-          onClick={() => setTab("experiments")}
+          className={activeTab === "experiments" ? "tab active" : "tab"}
+          onClick={() => onTabChange("experiments")}
         >
+          <FlaskConical size={16} />
           Experiments
         </button>
       </div>
 
-      {tab === "tasks" && (
+      {activeTab === "plan" && (
         <div className="panel-body">
           {todos.length === 0 && <div className="muted pad">No plan yet</div>}
           {todos.map((t, i) => (
             <div key={i} className={`todo ${t.status}`}>
-              <span className="todo-icon">{STATUS_ICON[t.status] ?? "○"}</span>
+              <span className="todo-icon">
+                {(() => {
+                  const Icon = STATUS_ICON[t.status] ?? Circle;
+                  return <Icon size={16} />;
+                })()}
+              </span>
               {t.content}
             </div>
           ))}
         </div>
       )}
 
-      {tab === "files" && !openFile && (
+      {activeTab === "files" && !openFile && (
         <div className="panel-body">
           {files.length === 0 && <div className="muted pad">Workspace is empty</div>}
           {files.map((f) => (
-            <div key={f.path} className="file-row" onClick={() => open(f.path)}>
-              <span className="file-path">{f.path}</span>
+            <div key={f.path} className="file-row" onClick={() => openWorkspaceFile(f.path)}>
+              <span className="file-path">
+                <FileText size={15} />
+                {f.path}
+              </span>
               <span className="muted">{(f.size / 1024).toFixed(1)} kB</span>
             </div>
           ))}
         </div>
       )}
 
-      {tab === "files" && openFile && (
+      {activeTab === "files" && openFile && (
         <div className="panel-body file-view">
           <div className="file-view-header">
             <button className="ghost small" onClick={() => setOpenFile(null)}>
-              ← back
+              <ArrowLeft size={15} />
+              back
             </button>
             <span className="file-path">{openFile.path}</span>
           </div>
@@ -169,12 +206,11 @@ export function SidePanel({
         </div>
       )}
 
-      {tab === "experiments" && (
+      {activeTab === "experiments" && (
         <div className="panel-body">
           {experiments.length === 0 && (
             <div className="muted pad">
-              No experiments logged yet — the agent records every training and
-              evaluation run here{initiative ? " for this initiative" : ""}.
+              No experiments logged yet{initiative ? " for this initiative" : ""}.
             </div>
           )}
 
@@ -187,11 +223,13 @@ export function SidePanel({
                   onClick={() => setCompare(true)}
                   title={selected.size < 2 ? "Select at least two runs" : "Compare selected runs"}
                 >
+                  <BarChart3 size={14} />
                   Compare ({selected.size})
                 </button>
               ) : (
                 <button className="ghost small" onClick={() => setCompare(false)}>
-                  ← back to list
+                  <ArrowLeft size={14} />
+                  back to list
                 </button>
               )}
             </div>
@@ -227,7 +265,7 @@ export function SidePanel({
                 </div>
                 {e.notes && <div className="muted experiment-notes">{e.notes}</div>}
                 {(e.artifacts ?? []).map((a) => (
-                  <button key={a} className="link artifact-link" onClick={() => open(a)}>
+                  <button key={a} className="link artifact-link" onClick={() => openWorkspaceFile(a)}>
                     {a}
                   </button>
                 ))}
@@ -256,17 +294,17 @@ export function SidePanel({
                   <div className="compare-chart-title">{chart.key}</div>
                   <ResponsiveContainer width="100%" height={150}>
                     <BarChart data={chart.data} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                      <XAxis dataKey="run" tick={{ fill: "#8494a8", fontSize: 10 }} hide />
-                      <YAxis tick={{ fill: "#8494a8", fontSize: 10 }} width={40} />
+                      <XAxis dataKey="run" tick={{ fill: "#6b7280", fontSize: 10 }} hide />
+                      <YAxis tick={{ fill: "#6b7280", fontSize: 10 }} width={40} />
                       <Tooltip
-                        cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                        cursor={{ fill: "rgba(15,23,42,0.04)" }}
                         contentStyle={{
-                          background: "#1a212c",
-                          border: "1px solid #2c3645",
+                          background: "#ffffff",
+                          border: "1px solid #d9dde5",
                           borderRadius: 6,
                           fontSize: 12,
                         }}
-                        labelStyle={{ color: "#dfe6ef" }}
+                        labelStyle={{ color: "#111827" }}
                       />
                       <Bar dataKey="value" radius={[3, 3, 0, 0]}>
                         {chart.data.map((d, i) => (

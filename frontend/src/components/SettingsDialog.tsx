@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Check, X } from "lucide-react";
 import { getComputeSettings, updateComputeSettings } from "../api";
 import type { ComputeSettings } from "../types";
 
@@ -44,10 +45,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="dialog-backdrop" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <h2>Compute settings</h2>
-        <p className="muted">
-          Where <code>run_training_job</code> executes training and heavy compute.
-        </p>
+        <div className="dialog-header">
+          <h2>Settings</h2>
+          <button className="icon-button" onClick={onClose} title="Close" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
 
         <label className="field">
           <span>Backend</span>
@@ -143,10 +146,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
         <div className="dialog-actions">
           <span className="muted">{status}</span>
-          <button className="ghost" onClick={onClose}>
+          <button className="ghost action-button" onClick={onClose}>
             Close
           </button>
-          <button className="primary" onClick={save}>
+          <button className="primary action-button" onClick={save}>
+            <Check size={16} />
             Save
           </button>
         </div>

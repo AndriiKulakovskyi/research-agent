@@ -54,6 +54,8 @@ export type StreamEvent =
 
 export type Decision = "approve" | "reject" | "respond";
 
+export type InspectorTab = "plan" | "files" | "experiments";
+
 export interface ComputeSettings {
   compute_backend: "local" | "modal" | string;
   gpu_type: string;
