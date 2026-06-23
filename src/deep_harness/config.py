@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_MODEL = "anthropic:claude-opus-4-8"
+DEFAULT_MODEL = "openai:gpt-5.5"
 
 
 @dataclass
@@ -18,7 +18,11 @@ class Settings:
     """Runtime settings, resolvable from environment variables.
 
     Environment variables:
-        DEEP_AGENT_MODEL      model id, ``provider:model`` form (default Claude Opus 4.8)
+        DEEP_AGENT_MODEL      model id, ``provider:model`` form
+                              (default OpenAI GPT-5.5). Examples:
+                              ``openai:gpt-5.5``,
+                              ``google_genai:gemini-3.5-flash``,
+                              ``anthropic:claude-opus-4-8``
         DEEP_AGENT_WORKSPACE  working directory for files, scripts, and artifacts
         DATABASE_URL          SQLAlchemy URL of the database the agent works with
         DATA_DICTIONARY_PATH  JSON file holding variable semantics (the data dictionary)

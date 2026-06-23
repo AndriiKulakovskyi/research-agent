@@ -5,7 +5,7 @@ Three patterns:
 2. multi-turn conversation on one thread
 3. streaming a run with tool-call visibility
 
-Requires ANTHROPIC_API_KEY (or DEEP_AGENT_MODEL pointing elsewhere).
+Requires an API key for DEEP_AGENT_MODEL (OPENAI_API_KEY by default).
 """
 
 from __future__ import annotations
