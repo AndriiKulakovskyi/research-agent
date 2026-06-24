@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Beaker, Folder, ListChecks, PanelLeftOpen, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ActionRequest, ChatItem, Decision, Initiative, InspectorTab, TodoItem } from "../types";
 import { ApprovalCard } from "./ApprovalCard";
+
+type ActivityItem = Extract<ChatItem, { kind: "activity" }>;
+type RenderBlock = ChatItem | { kind: "activity-group"; key: string; items: ActivityItem[] };
 
 interface Props {
   items: ChatItem[];
@@ -25,6 +30,91 @@ const INSPECTOR_ACTIONS: { tab: InspectorTab; label: string; icon: LucideIcon }[
   { tab: "files", label: "Files", icon: Folder },
   { tab: "experiments", label: "Runs", icon: Beaker },
 ];
+
+function MarkdownContent({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        a: ({ children, href }) => (
+          <a href={href} target="_blank" rel="noreferrer">
+            {children}
+          </a>
+        ),
+        table: ({ children }) => (
+          <div className="markdown-table-wrap">
+            <table>{children}</table>
+          </div>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+}
+
+function isGroupedActivity(item: ChatItem): item is ActivityItem {
+  return item.kind === "activity" && !item.label.toLowerCase().includes("error");
+}
+
+function groupChatItems(items: ChatItem[]): RenderBlock[] {
+  const blocks: RenderBlock[] = [];
+  let pending: ActivityItem[] = [];
+  let pendingStart = 0;
+
+  function flush() {
+    if (pending.length === 0) return;
+    blocks.push({ kind: "activity-group", key: `activity-${pendingStart}`, items: pending });
+    pending = [];
+  }
+
+  items.forEach((item, index) => {
+    if (isGroupedActivity(item)) {
+      if (pending.length === 0) pendingStart = index;
+      pending.push(item);
+      return;
+    }
+
+    flush();
+    blocks.push(item);
+  });
+  flush();
+
+  return blocks;
+}
+
+function activityName(label: string) {
+  return label.replace(/^[→✓]\s*/, "").trim();
+}
+
+function ActivityGroup({ items, live }: { items: ActivityItem[]; live: boolean }) {
+  const toolNames = Array.from(new Set(items.map((item) => activityName(item.label)).filter(Boolean)));
+  const visibleNames = toolNames.slice(0, 3).join(", ");
+  const extraNames = toolNames.length > 3 ? ` +${toolNames.length - 3}` : "";
+  const eventLabel = `${items.length} event${items.length === 1 ? "" : "s"}`;
+  const latest = toolNames[toolNames.length - 1] ?? "tools";
+
+  return (
+    <details className={`activity-group ${live ? "live" : ""}`}>
+      <summary>
+        <span className="activity-group-main">
+          <span className="activity-group-title">{live ? "Agent is using tools" : "Agent used tools"}</span>
+          <span className="activity-group-names">{visibleNames ? `${visibleNames}${extraNames}` : latest}</span>
+        </span>
+        <span className="activity-group-count">{eventLabel}</span>
+      </summary>
+      <div className="activity-group-body">
+        {items.map((item, index) => (
+          <div className="activity-row" key={`${item.label}-${index}`}>
+            <span className="activity-label">{item.label}</span>
+            {item.source !== "agent" && <span className="source-tag">{item.source}</span>}
+            {item.detail && <span className="activity-detail">{item.detail}</span>}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 export function Chat({
   items,
@@ -56,6 +146,7 @@ export function Chat({
   }
 
   const completedTodos = todos.filter((t) => t.status === "completed").length;
+  const blocks = groupChatItems(items);
 
   return (
     <section className="chat">
@@ -63,7 +154,7 @@ export function Chat({
         <div className="chat-title-group">
           <div className="chat-eyebrow">
             <Sparkles size={14} strokeWidth={2} />
-            Deep Harness
+            Precision Psychiatry
           </div>
           <div className="chat-title">{initiative?.name ?? "Research workspace"}</div>
           {initiative?.goal && <div className="chat-subtitle">{initiative.goal}</div>}
@@ -71,12 +162,12 @@ export function Chat({
         <div className="chat-actions" aria-label="Workspace panels">
           <button
             className={`icon-button labeled ${sidebarOpen ? "active" : ""}`}
-            title={sidebarOpen ? "Collapse Deep Harness" : "Open Deep Harness"}
+            title={sidebarOpen ? "Collapse sidebar" : "Open sidebar"}
             onClick={onToggleSidebar}
             aria-pressed={sidebarOpen}
           >
             <PanelLeftOpen size={17} />
-            <span>Deep Harness</span>
+            <span>Co-Scientist</span>
           </button>
           {INSPECTOR_ACTIONS.map((action) => {
             const Icon = action.icon;
@@ -111,7 +202,11 @@ export function Chat({
             <h1>What should we work on?</h1>
           </div>
         )}
-        {items.map((item, i) => {
+        {blocks.map((item, i) => {
+          if (item.kind === "activity-group") {
+            const live = busy && !streamingText && i === blocks.length - 1;
+            return <ActivityGroup key={item.key} items={item.items} live={live} />;
+          }
           if (item.kind === "user") {
             return (
               <div key={i} className="bubble user">
@@ -123,7 +218,9 @@ export function Chat({
             return (
               <div key={i} className="bubble assistant">
                 {item.source !== "agent" && <span className="source-tag">{item.source}</span>}
-                <pre>{item.content}</pre>
+                <div className="markdown-content">
+                  <MarkdownContent content={item.content} />
+                </div>
               </div>
             );
           }
@@ -137,7 +234,9 @@ export function Chat({
         })}
         {streamingText && (
           <div className="bubble assistant streaming">
-            <pre>{streamingText}</pre>
+            <div className="markdown-content">
+              <MarkdownContent content={streamingText} />
+            </div>
           </div>
         )}
         {busy && !streamingText && !pendingApproval && <div className="thinking">working…</div>}
