@@ -77,6 +77,14 @@ class TodoItem(BaseModel):
     status: str
 
 
+class ActionRequest(BaseModel):
+    name: str
+    args: dict[str, Any] = Field(default_factory=dict)
+    description: str = ""
+    allowed_decisions: list[str] = Field(default_factory=list)
+    revision_supported: bool = False
+
+
 class FileEntry(BaseModel):
     path: str
     size: int
@@ -90,8 +98,11 @@ class ComputeSettings(BaseModel):
     modal_token_id: str = ""
     modal_token_secret_set: bool = False
     gate_plan: bool = True
+    gate_researcher_checkpoint: bool = True
+    gate_cohort_export: bool = True
     gate_training_jobs: bool = True
     gate_shell: bool = True
+    gate_report_release: bool = True
 
 
 class ComputeSettingsUpdate(BaseModel):
@@ -102,8 +113,11 @@ class ComputeSettingsUpdate(BaseModel):
     modal_token_id: str | None = None
     modal_token_secret: str | None = None
     gate_plan: bool = True
+    gate_researcher_checkpoint: bool = True
+    gate_cohort_export: bool = True
     gate_training_jobs: bool = True
     gate_shell: bool = True
+    gate_report_release: bool = True
 
 
 class ResumeRequest(BaseModel):

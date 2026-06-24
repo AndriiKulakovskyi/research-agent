@@ -40,6 +40,8 @@ export interface ActionRequest {
   name: string;
   args: Record<string, unknown>;
   description: string;
+  allowed_decisions?: string[];
+  revision_supported?: boolean;
 }
 
 export type StreamEvent =
@@ -62,8 +64,11 @@ export interface ComputeSettings {
   modal_token_id: string;
   modal_token_secret_set: boolean;
   gate_plan: boolean;
+  gate_researcher_checkpoint: boolean;
+  gate_cohort_export: boolean;
   gate_training_jobs: boolean;
   gate_shell: boolean;
+  gate_report_release: boolean;
 }
 
 export interface ExperimentRecord {

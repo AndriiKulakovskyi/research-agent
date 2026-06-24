@@ -1,8 +1,7 @@
 """Per-user agent instances over a shared checkpointer.
 
 Multi-user model:
-- shared: the analytics database, data dictionary, and knowledge graph
-  (organization-level semantic assets), and one checkpointer DB for all threads
+- shared: one checkpointer DB for all threads and mounted cohort assets
 - per user: an isolated workspace directory (files, scripts, artifacts) and
   the threads they own (enforced in the API layer via the threads table)
 """
@@ -20,6 +19,10 @@ from deep_harness.compute import ComputeConfig
 from deep_harness.config import get_settings
 from deep_harness.crypto import decrypt_secret
 from deep_harness.server.db import AppDB
+from deep_harness.tools.planning import SCIENTIFIC_REVISION_GATES
+
+SCIENTIFIC_GATE_DECISIONS = ["approve", "reject", "respond"]
+EXECUTION_GATE_DECISIONS = ["approve", "reject"]
 
 
 class AgentManager:
@@ -47,20 +50,38 @@ class AgentManager:
             modal_token_secret=decrypt_secret(row["modal_token_secret"]),
         )
 
-    def interrupt_on(self, user_id: str) -> dict[str, bool]:
+    def interrupt_on(self, user_id: str) -> dict[str, dict[str, list[str]]]:
         """Which tools to gate for human approval, from the user's settings.
         Fixed at agent-build time, so a gate change must `invalidate` the agent."""
         row = self._db.get_user_settings(user_id)
         gate_plan = bool(row["gate_plan"]) if row is not None else True
+        gate_checkpoint = bool(row["gate_researcher_checkpoint"]) if row is not None else True
+        gate_export = bool(row["gate_cohort_export"]) if row is not None else True
         gate_training = bool(row["gate_training_jobs"]) if row is not None else True
         gate_shell = bool(row["gate_shell"]) if row is not None else True
-        gates: dict[str, bool] = {}
+        gate_report = bool(row["gate_report_release"]) if row is not None else True
+        gates: dict[str, dict[str, list[str]]] = {}
+
+        def gate(tool_name: str) -> dict[str, list[str]]:
+            decisions = (
+                SCIENTIFIC_GATE_DECISIONS
+                if tool_name in SCIENTIFIC_REVISION_GATES
+                else EXECUTION_GATE_DECISIONS
+            )
+            return {"allowed_decisions": decisions}
+
         if gate_plan:
-            gates["submit_plan"] = True
+            gates["submit_plan"] = gate("submit_plan")
+        if gate_checkpoint:
+            gates["researcher_checkpoint"] = gate("researcher_checkpoint")
+        if gate_export:
+            gates["face_export_analysis_dataset"] = gate("face_export_analysis_dataset")
         if gate_training:
-            gates["run_training_job"] = True
+            gates["run_training_job"] = gate("run_training_job")
         if gate_shell:
-            gates["execute"] = True
+            gates["execute"] = gate("execute")
+        if gate_report:
+            gates["submit_final_report"] = gate("submit_final_report")
         return gates
 
     def user_workspace(self, user_id: str) -> Path:

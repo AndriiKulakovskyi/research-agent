@@ -41,6 +41,7 @@ export default function App() {
   const [activeInitiativeId, setActiveInitiativeId] = useState<string | null>(null);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [todosLoading, setTodosLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -50,6 +51,7 @@ export default function App() {
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("plan");
   const streamBuffer = useRef("");
+  const hasSeenTodos = useRef(false);
 
   const refreshThreads = useCallback(async () => {
     setThreads(await listThreads());
@@ -73,25 +75,31 @@ export default function App() {
       setActiveInitiativeId(threads.find((t) => t.id === id)?.initiative_id ?? null);
       setStreamingText("");
       streamBuffer.current = "";
-      const [history, threadTodos] = await Promise.all([getHistory(id), getTodos(id)]);
-      setTodos(threadTodos);
-      setItems(
-        history.map((m): ChatItem => {
-          if (m.role === "user") return { kind: "user", content: m.content };
-          if (m.role === "tool") {
-            return {
-              kind: "activity",
-              label: m.tool_name ?? "tool",
-              detail: m.content.slice(0, 120),
-              source: "agent",
-            };
-          }
-          const calls = m.tool_calls.map((c) => c.name).join(", ");
-          return m.content
-            ? { kind: "assistant", content: m.content, source: "agent" }
-            : { kind: "activity", label: `→ ${calls}`, detail: "", source: "agent" };
-        }),
-      );
+      setTodosLoading(true);
+      try {
+        const [history, threadTodos] = await Promise.all([getHistory(id), getTodos(id)]);
+        setTodos(threadTodos);
+        hasSeenTodos.current = threadTodos.length > 0;
+        setItems(
+          history.map((m): ChatItem => {
+            if (m.role === "user") return { kind: "user", content: m.content };
+            if (m.role === "tool") {
+              return {
+                kind: "activity",
+                label: m.tool_name ?? "tool",
+                detail: m.content.slice(0, 120),
+                source: "agent",
+              };
+            }
+            const calls = m.tool_calls.map((c) => c.name).join(", ");
+            return m.content
+              ? { kind: "assistant", content: m.content, source: "agent" }
+              : { kind: "activity", label: `→ ${calls}`, detail: "", source: "agent" };
+          }),
+        );
+      } finally {
+        setTodosLoading(false);
+      }
     },
     [threads],
   );
@@ -111,9 +119,11 @@ export default function App() {
   async function removeThread(id: string) {
     await deleteThread(id);
     if (id === activeId) {
-      setActiveId(null);
-      setItems([]);
-      setTodos([]);
+        setActiveId(null);
+        setItems([]);
+        setTodos([]);
+        setTodosLoading(false);
+        hasSeenTodos.current = false;
     }
     await refreshThreads();
   }
@@ -150,6 +160,11 @@ export default function App() {
         break;
       case "todos":
         setTodos(event.items);
+        if (event.items.length > 0 && !hasSeenTodos.current) {
+          hasSeenTodos.current = true;
+          setInspectorTab("plan");
+          setInspectorOpen(true);
+        }
         break;
       case "message":
         streamBuffer.current = "";
@@ -174,14 +189,30 @@ export default function App() {
     }
   }, []);
 
-  const finishStream = useCallback(() => {
+  const refreshTodosForThread = useCallback(async (threadId: string | null) => {
+    if (!threadId) return;
+    try {
+      const threadTodos = await getTodos(threadId);
+      setTodos(threadTodos);
+      if (threadTodos.length > 0 && !hasSeenTodos.current) {
+        hasSeenTodos.current = true;
+        setInspectorTab("plan");
+        setInspectorOpen(true);
+      }
+    } catch {
+      // Keep the streamed todo state if the refresh fails.
+    }
+  }, []);
+
+  const finishStream = useCallback(async (threadId: string | null) => {
     setBusy(false);
     setStreamingText("");
     streamBuffer.current = "";
+    await refreshTodosForThread(threadId);
     setRefreshKey((k) => k + 1);
     refreshThreads().catch(() => undefined);
     refreshInitiatives().catch(() => undefined);
-  }, [refreshThreads, refreshInitiatives]);
+  }, [refreshThreads, refreshInitiatives, refreshTodosForThread]);
 
   async function moveThread(id: string, initiativeId: string | null) {
     await setThreadInitiative(id, initiativeId);
@@ -216,6 +247,7 @@ export default function App() {
       const t = await createThread(activeInitiativeId);
       threadId = t.id;
       setActiveId(threadId);
+      hasSeenTodos.current = false;
     }
     setItems((prev) => [...prev, { kind: "user", content }]);
     setBusy(true);
@@ -223,7 +255,7 @@ export default function App() {
     try {
       await streamMessage(threadId, content, handleEvent);
     } finally {
-      finishStream();
+      await finishStream(threadId);
     }
   }
 
@@ -235,7 +267,7 @@ export default function App() {
       ...prev,
       {
         kind: "activity",
-        label: decision === "approve" ? "✓ approved" : decision === "reject" ? "✕ rejected" : "✎ changes requested",
+        label: decision === "approve" ? "✓ approved" : decision === "reject" ? "✕ rejected" : "✎ revision requested",
         detail: message ?? request?.name ?? "",
         source: "agent",
       },
@@ -245,7 +277,7 @@ export default function App() {
     try {
       await resumeMessage(activeId, decision, message, handleEvent);
     } finally {
-      finishStream();
+      await finishStream(activeId);
     }
   }
 
@@ -304,6 +336,7 @@ export default function App() {
       )}
       <SidePanel
         todos={todos}
+        todosLoading={todosLoading}
         refreshKey={refreshKey}
         initiative={activeInitiative}
         open={inspectorOpen}

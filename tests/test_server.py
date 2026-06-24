@@ -39,6 +39,25 @@ def _gated_client(settings):
     return TestClient(app)
 
 
+def _checkpoint_client(replies):
+    model = ScriptedModel(replies=replies)
+    app = create_app(model=model)
+    return TestClient(app)
+
+
+def _checkpoint_call(call_id="call1"):
+    return tool_call_message(
+        "researcher_checkpoint",
+        {
+            "summary": "Endpoint candidates are MADRS change and remission.",
+            "decision_needed": "Choose the primary endpoint.",
+            "options": ["MADRS change", "remission"],
+            "artifact_paths": ["research/PLAN.md"],
+        },
+        call_id=call_id,
+    )
+
+
 def _auth(client, username="alice", password="password123"):
     response = client.post(
         "/api/auth/register", json={"username": username, "password": password}
@@ -146,8 +165,11 @@ def test_compute_settings_roundtrip(client):
         "modal_token_id": "",
         "modal_token_secret_set": False,
         "gate_plan": True,
+        "gate_researcher_checkpoint": True,
+        "gate_cohort_export": True,
         "gate_training_jobs": True,
         "gate_shell": True,  # shell runs unsandboxed, so it's gated by default
+        "gate_report_release": True,
     }
     # gate flags persist
     gated = client.put(
@@ -156,8 +178,11 @@ def test_compute_settings_roundtrip(client):
             "compute_backend": "local",
             "gpu_type": "A10G",
             "gate_plan": False,
+            "gate_researcher_checkpoint": True,
+            "gate_cohort_export": True,
             "gate_training_jobs": True,
             "gate_shell": True,
+            "gate_report_release": True,
         },
         headers=headers,
     ).json()
@@ -369,7 +394,10 @@ def test_gated_tool_pauses_and_resumes_via_api(settings):
             events = _sse(resp)
         approvals = [e for e in events if e["type"] == "approval_required"]
         assert approvals, events
-        assert approvals[0]["requests"][0]["name"] == "run_training_job"
+        request = approvals[0]["requests"][0]
+        assert request["name"] == "run_training_job"
+        assert request["allowed_decisions"] == ["approve", "reject"]
+        assert request["revision_supported"] is False
 
         # Approve → the continuation streams and the tool executes
         with client.stream(
@@ -379,6 +407,80 @@ def test_gated_tool_pauses_and_resumes_via_api(settings):
             events = _sse(resp)
         tool_results = [e for e in events if e["type"] == "tool_result"]
         assert any(e["name"] == "run_training_job" for e in tool_results), events
+
+
+def test_checkpoint_revision_response_wraps_feedback_via_api(settings):
+    with _checkpoint_client([_checkpoint_call(), AIMessage(content="Revision noted.")]) as client:
+        headers = _auth(client)
+        thread = client.post("/api/threads", json={}, headers=headers).json()
+        tid = thread["id"]
+
+        with client.stream(
+            "POST",
+            f"/api/threads/{tid}/messages",
+            json={"content": "choose endpoint"},
+            headers=headers,
+        ) as resp:
+            events = _sse(resp)
+        request = [e for e in events if e["type"] == "approval_required"][0]["requests"][0]
+        assert request["name"] == "researcher_checkpoint"
+        assert request["revision_supported"] is True
+        assert "respond" in request["allowed_decisions"]
+
+        with client.stream(
+            "POST",
+            f"/api/threads/{tid}/resume",
+            json={"decision": "respond", "message": "Use MADRS change."},
+            headers=headers,
+        ) as resp:
+            events = _sse(resp)
+        assert "error" not in [e["type"] for e in events], events
+
+        history = client.get(f"/api/threads/{tid}/messages", headers=headers).json()
+        tool_messages = [m for m in history if m["role"] == "tool"]
+        assert any("Researcher revision requested" in m["content"] for m in tool_messages)
+        assert any("Use MADRS change." in m["content"] for m in tool_messages)
+        assert any("write_todos" in m["content"] for m in tool_messages)
+
+
+def test_checkpoint_revision_replans_todos_and_resubmits(settings):
+    revised_todos = [
+        {"content": "Revise endpoint definition", "status": "completed"},
+        {"content": "Update validation plan", "status": "in_progress"},
+    ]
+    with _checkpoint_client(
+        [
+            _checkpoint_call(),
+            tool_call_message("write_todos", {"todos": revised_todos}, call_id="todos1"),
+            _checkpoint_call(call_id="call2"),
+        ]
+    ) as client:
+        headers = _auth(client)
+        thread = client.post("/api/threads", json={}, headers=headers).json()
+        tid = thread["id"]
+
+        with client.stream(
+            "POST",
+            f"/api/threads/{tid}/messages",
+            json={"content": "choose endpoint"},
+            headers=headers,
+        ) as resp:
+            _sse(resp)
+
+        with client.stream(
+            "POST",
+            f"/api/threads/{tid}/resume",
+            json={"decision": "respond", "message": "Use MADRS change."},
+            headers=headers,
+        ) as resp:
+            events = _sse(resp)
+
+        assert any(e["type"] == "todos" and e["items"] == revised_todos for e in events), events
+        approvals = [e for e in events if e["type"] == "approval_required"]
+        assert approvals, events
+        assert approvals[-1]["requests"][0]["name"] == "researcher_checkpoint"
+        assert approvals[-1]["requests"][0]["revision_supported"] is True
+        assert client.get(f"/api/threads/{tid}/todos", headers=headers).json() == revised_todos
 
 
 def test_gate_off_runs_without_pause(settings):

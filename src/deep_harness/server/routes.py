@@ -35,6 +35,7 @@ from deep_harness.server.streaming import (
     serialize_history,
     stream_agent_events,
 )
+from deep_harness.tools.planning import SCIENTIFIC_REVISION_GATES
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 threads_router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -48,6 +49,24 @@ IMAGE_MEDIA_TYPES = {"image/png", "image/jpeg", "image/gif", "image/svg+xml", "i
 MAX_FILE_BYTES = 512_000
 MAX_IMAGE_BYTES = 8_000_000
 RECURSION_LIMIT = 250
+
+
+def _revision_directive(requests: list[dict], feedback: str) -> str:
+    names = ", ".join(
+        str(req.get("name"))
+        for req in requests
+        if req.get("name") in SCIENTIFIC_REVISION_GATES
+    )
+    return (
+        "Researcher revision requested for checkpoint(s): "
+        f"{names}.\n\n"
+        f"Reviewer feedback:\n{feedback}\n\n"
+        "This is not approval. Do not continue down the proposed trajectory yet. "
+        "Revise the affected plan, report, or artifact state; call `write_todos` "
+        "with the complete updated todo list reflecting the new trajectory; then "
+        "re-submit the relevant scientific checkpoint for review before executing "
+        "the changed direction."
+    )
 
 
 def _thread_config(
@@ -228,11 +247,24 @@ async def resume_run(
     state = await agent.aget_state(config)
     if not getattr(state, "next", None):
         raise HTTPException(409, "this run is not waiting for approval")
-    count = max(1, len(pending_approvals(state)))
+    approvals = pending_approvals(state)
+    count = max(1, len(approvals))
 
     decision: dict = {"type": body.decision}
-    if body.message:
-        decision["message"] = body.message
+    message = body.message.strip() if body.message else ""
+    if body.decision == "respond":
+        if not message:
+            raise HTTPException(400, "revision feedback is required")
+        if not approvals or not all(
+            req.get("name") in SCIENTIFIC_REVISION_GATES for req in approvals
+        ):
+            raise HTTPException(
+                400,
+                "revision feedback is only supported for scientific checkpoints",
+            )
+        decision["message"] = _revision_directive(approvals, message)
+    elif message:
+        decision["message"] = message
     command = Command(resume={"decisions": [decision] * count})
 
     return StreamingResponse(
@@ -256,8 +288,11 @@ def get_settings_route(request: Request, user: CurrentUser = Depends(get_current
         modal_token_id=row["modal_token_id"],
         modal_token_secret_set=bool(row["modal_token_secret"]),
         gate_plan=bool(row["gate_plan"]),
+        gate_researcher_checkpoint=bool(row["gate_researcher_checkpoint"]),
+        gate_cohort_export=bool(row["gate_cohort_export"]),
         gate_training_jobs=bool(row["gate_training_jobs"]),
         gate_shell=bool(row["gate_shell"]),
+        gate_report_release=bool(row["gate_report_release"]),
     )
 
 
@@ -275,8 +310,11 @@ def update_settings_route(
         modal_token_id=body.modal_token_id,
         modal_token_secret=body.modal_token_secret,
         gate_plan=body.gate_plan,
+        gate_researcher_checkpoint=body.gate_researcher_checkpoint,
+        gate_cohort_export=body.gate_cohort_export,
         gate_training_jobs=body.gate_training_jobs,
         gate_shell=body.gate_shell,
+        gate_report_release=body.gate_report_release,
     )
     # Gating is fixed at agent-build time — drop the cached agent so the change applies.
     request.app.state.agents.invalidate(user.id)

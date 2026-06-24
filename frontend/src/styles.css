@@ -1438,6 +1438,28 @@ pre {
   line-height: 1.5;
 }
 
+.approval-field {
+  display: grid;
+  gap: 4px;
+}
+
+.approval-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.approval-field p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.approval-list {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
 .approval-title code,
 .approval-args,
 .plan-body {

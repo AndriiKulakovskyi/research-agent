@@ -6,7 +6,8 @@ Event types emitted (each as one SSE `data:` line of JSON):
     tool_result  {name, preview, source}   a tool returned (truncated preview)
     todos        {items: [{content, status}]}
     message      {role, content}           a completed assistant message
-    approval_required {requests: [{name, args, description}]}  run paused for a gate
+    approval_required {requests: [{name, args, description, allowed_decisions,
+                      revision_supported}]}  run paused for a gate
     error        {detail}
     done         {}
 """
@@ -18,6 +19,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from deep_harness.messages import PREVIEW_CHARS, message_text, serialize_history
+from deep_harness.tools.planning import SCIENTIFIC_REVISION_GATES
 
 __all__ = ["sse", "serialize_history", "stream_agent_events", "pending_approvals"]
 
@@ -40,12 +42,35 @@ def pending_approvals(state: Any) -> list[dict[str, Any]]:
         for interrupt in getattr(task, "interrupts", ()) or ():
             value = getattr(interrupt, "value", None)
             if isinstance(value, dict):
-                for req in value.get("action_requests", []) or []:
+                review_configs = value.get("review_configs", []) or []
+                for index, req in enumerate(value.get("action_requests", []) or []):
+                    name = req.get("name")
+                    review_config = (
+                        review_configs[index]
+                        if index < len(review_configs) and isinstance(review_configs[index], dict)
+                        else {}
+                    )
+                    if review_config.get("action_name") != name:
+                        review_config = next(
+                            (
+                                cfg
+                                for cfg in review_configs
+                                if isinstance(cfg, dict) and cfg.get("action_name") == name
+                            ),
+                            review_config,
+                        )
+                    allowed_decisions = [
+                        d
+                        for d in review_config.get("allowed_decisions", [])
+                        if isinstance(d, str)
+                    ]
                     requests.append(
                         {
-                            "name": req.get("name"),
+                            "name": name,
                             "args": req.get("args", {}),
                             "description": req.get("description", ""),
+                            "allowed_decisions": allowed_decisions,
+                            "revision_supported": name in SCIENTIFIC_REVISION_GATES,
                         }
                     )
     return requests

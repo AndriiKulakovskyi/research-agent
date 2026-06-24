@@ -1,4 +1,4 @@
-"""Build the deep harness agent (deepagents on LangGraph)."""
+"""Build the precision psychiatry co-scientist agent."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from deep_harness.compute import ComputeConfig, ConfigProvider, make_training_to
 from deep_harness.config import Settings, get_settings, set_settings
 from deep_harness.prompts import MAIN_SYSTEM_PROMPT
 from deep_harness.subagents import SKILL_SOURCES, build_subagents
-from deep_harness.tools import ALL_TOOLS
+from deep_harness.tools import ALL_TOOLS, make_face_export_tool
 from deep_harness.tools.experiments import make_experiment_tools
 from deep_harness.tools.planning import PLANNING_TOOLS
 
@@ -61,23 +61,25 @@ def build_agent(
     workspace_dir: Path | None = None,
     checkpointer: bool | BaseCheckpointSaver | None = True,
     compute_config_provider: ConfigProvider | None = None,
-    interrupt_on: dict[str, bool] | None = None,
+    interrupt_on: dict[str, Any] | None = None,
 ) -> Any:
     """Create the compiled LangGraph deep agent.
 
     The agent gets the deepagents built-ins (write_todos planning, filesystem
     tools, shell `execute`, `task` subagent dispatch) on a LocalShellBackend
-    rooted in the workspace, plus the database, semantics, and knowledge-graph
-    tools, and four specialist subagents.
+    rooted in the workspace, plus FACE cohort tools, research tools, compute
+    tools, and precision psychiatry specialist subagents.
 
     `model` and `workspace_dir` override the settings — the server uses them to
     inject a per-user workspace (and tests use them to inject a fake model).
     `compute_config_provider` is consulted at every `run_training_job` call to
     decide where training jobs run (local host vs Modal GPU sandbox); the
-    server passes a per-user database lookup, the CLI defaults to env vars.
-    `interrupt_on` maps tool names to a bool gate — the run pauses for human
-    approval before each gated tool (e.g. `submit_plan`, `run_training_job`,
-    `execute`); requires a real checkpointer so the paused state persists.
+    server passes a per-user compute settings lookup, the CLI defaults to env vars.
+    `interrupt_on` maps tool names to HITL gate configs — the run pauses for
+    human approval before each gated tool (e.g. `submit_plan`,
+    `researcher_checkpoint`, `face_export_analysis_dataset`,
+    `run_training_job`, `execute`); requires a real checkpointer so the paused
+    state persists.
 
     Note: LocalShellBackend runs shell commands directly on this machine with
     no sandboxing — run the agent in a container/VM when working on untrusted
@@ -103,7 +105,8 @@ def build_agent(
     provider = compute_config_provider or ComputeConfig.from_env
     training_tool = make_training_tool(root, provider)
     experiment_tools = make_experiment_tools(root)
-    workspace_tools = [training_tool, *experiment_tools, *PLANNING_TOOLS]
+    face_export_tool = make_face_export_tool(root)
+    workspace_tools = [face_export_tool, training_tool, *experiment_tools, *PLANNING_TOOLS]
 
     # With a research server configured, the agent also gets async task tools
     # (start/check/update/cancel) to run literature research in the background
@@ -121,7 +124,7 @@ def build_agent(
                         "name": "async-researcher",
                         "description": (
                             "Background research analyst (runs on a separate server): "
-                            "literature reviews over arXiv/Semantic Scholar/web with "
+                            "literature reviews over PubMed/Semantic Scholar/arXiv/web with "
                             "citations. Kick it off, keep working, check back for the "
                             "report."
                         ),
